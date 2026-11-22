@@ -3,6 +3,7 @@ import { AIRLINES, AIRLINE, CREDIT, CABINS, CABIN, cabinFromClass } from './skyp
 import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
+import { lookupFlight, LOOKUP_SOURCE } from './lookup.js';
 import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark } from './ui.jsx';
 
 const blank = (o = {}) => ({
@@ -38,7 +39,7 @@ function fromFlight(f) {
   return blank({ ...f, cabin: f.cabin || (f.airline === 'KE' && f.cls ? cabinFromClass(f.cls) : 'Y'), key: f.id, showBase: f.baseSource === 'manual', showOverride: f.milesOverride != null, baseTouched: f.baseSource === 'manual' || f.baseSource === 'ai', creditTouched: f.credit !== defaultCredit(f.airline) });
 }
 
-export default function FlightForm({ initial, today, aiOk, onSave, onCancel, onDeleteTrip }) {
+export default function FlightForm({ initial, today, aiOk, myFlights = [], onSave, onCancel, onDeleteTrip }) {
   const editing = !!initial;
   const [kind, setKind] = useState(initial?.trip?.kind || (initial?.flights?.length > 1 ? 'multi' : 'oneway'));
   const [segs, setSegs] = useState(() => (initial?.flights?.length ? initial.flights.map(fromFlight) : [blank()]));
@@ -181,6 +182,7 @@ export default function FlightForm({ initial, today, aiOk, onSave, onCancel, onD
             n={segs.length}
             err={tried ? errs[i] : {}}
             showPrice={priceMode === 'each'}
+            myFlights={myFlights}
             onChange={(p) => setSeg(i, p)}
             onRemove={kind === 'multi' && segs.length > 2 ? () => setSegs((a) => a.filter((_, k) => k !== i)) : null}
           />
@@ -220,9 +222,31 @@ export default function FlightForm({ initial, today, aiOk, onSave, onCancel, onD
   );
 }
 
-function SegCard({ s, i, n, err, showPrice, onChange, onRemove }) {
+function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
   const known = AIRLINE[s.airline];
   const [custom, setCustom] = useState(!known && !!s.airline);
+  const [lk, setLk] = useState(null); // { busy } | { ok, text, source, legs }
+
+  const applyLeg = (leg, source, note) => {
+    onChange({ from: leg.from, to: leg.to, dep: leg.dep || '', arr: leg.arr || '', arrOffset: +leg.arrOffset || 0, ...(leg.date && !s.date ? { date: leg.date } : {}) });
+    const name = (c) => findAirport(c)?.city || c;
+    const unknown = [leg.from, leg.to].filter((c) => !findAirport(c));
+    setLk({ ok: true, source, text: `${name(leg.from)} → ${name(leg.to)}${leg.dep ? ` · ${leg.dep}${leg.arr ? `–${leg.arr}${+leg.arrOffset ? ` (+${leg.arrOffset})` : ''}` : ''}` : ''} 채웠어요.${source === 'ai' ? ' AI 추정이라 맞는지 확인해 주세요.' : ''}${unknown.length ? ` ${unknown.join('·')}은 공항 목록에 없어 구간 마일을 직접 넣어야 해요.` : ''}${note && source === 'ai' ? ` ${note}` : ''}` });
+  };
+  const lookup = async () => {
+    if (!s.airline || !s.flightNo) return setLk({ ok: false, text: '항공사와 편명을 먼저 넣어 주세요.' });
+    setLk({ busy: true });
+    try {
+      const r = await lookupFlight({ airline: s.airline, flightNo: s.flightNo, date: s.date }, myFlights);
+      const legs = r.legs || [];
+      if (!legs.length) return setLk({ ok: false, text: `${s.airline}${s.flightNo} 운항 정보를 찾지 못했어요. 출발·도착을 직접 골라 주세요.` });
+      const pick = legs.length === 1 ? legs[0] : legs.find((l) => s.from && l.from === s.from) || null;
+      if (pick) return applyLeg(pick, r.source, r.note);
+      setLk({ ok: true, source: r.source, legs, note: r.note, text: '여러 구간을 운항하는 편명이에요. 탄 구간을 골라 주세요.' });
+    } catch (e) {
+      setLk({ ok: false, text: e.message || '조회에 실패했어요.' });
+    }
+  };
   const e = earnedMiles({ ...s, milesOverride: s.showOverride ? s.milesOverride : null });
   const p = flightPoints({ ...s });
   const cabin = s.cls && s.airline === 'KE' ? CABIN[cabinFromClass(s.cls)]?.name : null;
@@ -250,9 +274,29 @@ function SegCard({ s, i, n, err, showPrice, onChange, onRemove }) {
         </label>
         <label className="field">
           <span>편명</span>
-          <input className="input num" value={s.flightNo} inputMode="numeric" placeholder="예: 41" onChange={(ev) => onChange({ flightNo: ev.target.value.replace(/\s/g, '') })} />
+          <div className="inbtn">
+            <input className="input num" value={s.flightNo} inputMode="numeric" placeholder="예: 41" onChange={(ev) => { onChange({ flightNo: ev.target.value.replace(/\s/g, '') }); if (lk && !lk.busy) setLk(null); }} onBlur={() => s.flightNo && !s.from && !s.to && !lk && lookup()} onKeyDown={(ev) => ev.key === 'Enter' && (ev.preventDefault(), lookup())} />
+            <button type="button" className="in-btn" onMouseDown={(ev) => ev.preventDefault()} onClick={lookup} disabled={lk?.busy} aria-label="편명으로 출발·도착 찾기" title="편명으로 출발·도착 찾기">
+              {lk?.busy ? <span className="spin" style={{ width: 15, height: 15 }} /> : <Icon name="search" size={17} />}
+            </button>
+          </div>
         </label>
       </div>
+      {lk && !lk.busy && (
+        <div className={`lookup ${lk.ok ? '' : 'err'}`}>
+          {lk.source && <span className={`src ${lk.source === 'live' ? 'ke' : lk.source === 'ai' ? 'ai' : ''}`}>{LOOKUP_SOURCE[lk.source]}</span>}
+          <span>{lk.text}</span>
+          {lk.legs && (
+            <div className="legs">
+              {lk.legs.map((l) => (
+                <button key={l.from + l.to} type="button" className="chip-btn num" onClick={() => applyLeg(l, lk.source, lk.note)}>
+                  {l.from} → {l.to}{l.dep ? ` ${l.dep}` : ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="route">
         <AirportInput label="출발" value={s.from} onChange={(v) => onChange({ from: v })} />
         <button type="button" className="swap" onClick={() => onChange({ from: s.to, to: s.from })} aria-label="출발·도착 바꾸기"><Icon name="swap" size={18} /></button>

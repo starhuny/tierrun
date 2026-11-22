@@ -350,3 +350,15 @@ details.adv summary { font-weight: 700; cursor: pointer; font-size: 14px; }
 .notice { border-radius: 14px; padding: 11px 13px; font-size: 13px; line-height: 1.55; background: light-dark(#fdf3e4, #3a2c14); color: light-dark(#7a4a0c, #f5cf8f); }
 .notice b { color: inherit; }
 .notice .link { color: inherit; }
+.badge.cr-ST { background: light-dark(#dcefff, #12385c); color: light-dark(#1769b3, #9fd2ff); }
+.badge.cr-OT { background: light-dark(#f7e3e6, #44161f); color: light-dark(#8b1f2d, #f2a9b5); }
+.inbtn { position: relative; }
+.inbtn .input { padding-right: 40px; }
+.in-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 9px; border: 0; background: transparent; color: var(--sky-ink); display: grid; place-items: center; cursor: pointer; }
+.in-btn:hover { background: var(--sky-soft); }
+.in-btn:disabled { opacity: 0.6; cursor: default; }
+.lookup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: -2px; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.lookup.err { color: var(--warn); }
+.lookup .legs { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.chip-btn { border: 1px solid var(--line); background: var(--bg-1, transparent); color: var(--ink); border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.chip-btn:hover { border-color: var(--sky); }

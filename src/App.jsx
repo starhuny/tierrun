@@ -266,6 +266,7 @@ export default function App() {
         initial={tripFl?.length ? { trip: trips[view.tripId] || null, flights: tripFl } : null}
         today={today}
         aiOk={aiOk}
+        myFlights={flights}
         onSave={saveTrip}
         onCancel={() => (view.flightId ? open(view.flightId) : setStack(null))}
         onDeleteTrip={() => deleteTrip(view.tripId)}

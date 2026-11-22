@@ -3,6 +3,7 @@ import { AIRLINE, RATE_STOPS } from './skypass.js';
 import { findAirport, searchAirports } from './airports.js';
 
 const P = {
+  search: 'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM20 20l-4.6-4.6',
   plane: 'M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z',
   close: 'M6 6l12 12M18 6L6 18',
   back: 'M15 5l-7 7 7 7',

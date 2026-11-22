@@ -49,7 +49,7 @@ export function FlightRow({ f, ctx, selected, onClick }) {
           {p > 0 && <span className="chip"><b>+{p}</b>P</span>}
           {c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
           <CabinBadge f={f} />
-          {(f.credit === 'ST' || f.credit === 'OT') && <span className="badge gray">{CREDIT[f.credit].short}</span>}
+          {(f.credit === 'ST' || f.credit === 'OT') && <span className={`badge cr-${f.credit}`}>{CREDIT[f.credit].short}</span>}
           {excluded && f.credit !== 'NONE' && <span className="badge gray">입력한 실적에 포함</span>}
         </div>
       </div>
@@ -201,7 +201,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
 
       <div className="pad" style={{ marginTop: 14 }}>
         <div className="card">
-          <div className="card-h"><span>스카이패스 적립</span><span className="badge gray">{CREDIT[f.credit]?.label}</span></div>
+          <div className="card-h"><span>스카이패스 적립</span><span className={`badge ${f.credit === 'ST' || f.credit === 'OT' ? `cr-${f.credit}` : 'gray'}`}>{CREDIT[f.credit]?.label}</span></div>
           {f.credit === 'NONE' ? (
             <p className="muted" style={{ margin: 0, fontSize: 14 }}>이 항공편은 스카이패스 등급 실적에 넣지 않았어요. 편집에서 실적 구분을 바꿀 수 있어요.</p>
           ) : (
