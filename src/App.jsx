@@ -5,6 +5,7 @@ import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum } f
 import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
+import ImportFlighty from './ImportFlighty.jsx';
 import Settings, { emptyProfile } from './Settings.jsx';
 import { FlightsView, DetailView, TierView, CostView, Head, MapStrip } from './views.jsx';
 import { Icon, Avatar } from './ui.jsx';
@@ -54,10 +55,10 @@ export default function App() {
   const loaded = useRef(false);
   const scrollRef = useRef(null);
 
-  const say = useCallback((t) => {
-    setToast(t);
+  const say = useCallback((t, undo) => {
+    setToast(undo ? { text: t, undo } : t);
     clearTimeout(say.t);
-    say.t = setTimeout(() => setToast(null), 2600);
+    say.t = setTimeout(() => setToast(null), undo ? 5000 : 2600);
   }, []);
 
   const loadFrom = async (a) => {
@@ -135,6 +136,37 @@ export default function App() {
     setSel(null);
     setStack(null);
     say('삭제했어요');
+  };
+  // 목록에서 밀어서 삭제 (되돌리기 가능)
+  const swipeDelete = (id) => {
+    const f = state.flights.find((x) => x.id === id);
+    if (!f) return;
+    const trip = f.tripId ? state.trips[f.tripId] : null;
+    setState((s) => {
+      const rest = s.flights.filter((x) => x.id !== id);
+      const trips2 = { ...s.trips };
+      if (f.tripId && trips2[f.tripId]) {
+        const left = rest.filter((x) => x.tripId === f.tripId);
+        if (!left.length) delete trips2[f.tripId];
+        else if (left.length === 1) trips2[f.tripId] = { ...trips2[f.tripId], kind: 'oneway' };
+      }
+      return { ...s, flights: rest, trips: trips2 };
+    });
+    if (sel === id) setSel(null);
+    say(`${f.airline} ${f.flightNo} 삭제했어요`, () => {
+      setState((s) => ({ ...s, flights: s.flights.some((x) => x.id === f.id) ? s.flights : [...s.flights, f], trips: trip ? { ...s.trips, [trip.id]: trip } : s.trips }));
+      setToast(null);
+    });
+  };
+  const importFlights = (fl) => {
+    setState((s) => {
+      const trips2 = { ...s.trips };
+      for (const f of fl) trips2[f.tripId] = { id: f.tripId, kind: 'oneway', priceMode: 'each', price: null };
+      return { ...s, flights: [...s.flights, ...fl], trips: trips2 };
+    });
+    setStack(null);
+    setTab('flights');
+    say(`${fl.length}편을 가져왔어요 · ${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일`);
   };
   const deleteTrip = (tripId) => {
     setState((s) => {
@@ -234,6 +266,7 @@ export default function App() {
         }}
         onClose={() => setStack(null)}
         onSample={loadSample}
+        onFlighty={() => setStack({ name: 'import' })}
         onExport={() => JSON.stringify({ app: 'tierrun', v: 1, ...state })}
         onImport={(txt) => {
           try {
@@ -258,6 +291,8 @@ export default function App() {
         }}
       />
     );
+  } else if (view?.name === 'import') {
+    content = <ImportFlighty ctx={ctx} onImport={importFlights} onClose={() => setStack(null)} />;
   } else if (view?.name === 'form') {
     const tripFl = view.tripId ? sortFlights(flights.filter((f) => f.tripId === view.tripId)) : view.flightId ? flights.filter((f) => f.id === view.flightId) : null;
     content = (
@@ -292,6 +327,8 @@ export default function App() {
         onOpen={open}
         onAdd={addNew}
         onSample={loadSample}
+        onFlighty={() => setStack({ name: 'import' })}
+        onDelete={swipeDelete}
         onTier={() => setTab('tier')}
         banner={banner}
         head={<Head title="내 항공편" right={avatar} />}
@@ -348,7 +385,11 @@ export default function App() {
           <p style={{ margin: 0 }} className="muted">항공편을 추가하면 노선이 지구본에 그려져요.</p>
         </div>
       )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          {typeof toast === 'string' ? toast : <>{toast.text}<button className="toast-undo" onClick={toast.undo}>되돌리기</button></>}
+        </div>
+      )}
     </div>
   );
 }

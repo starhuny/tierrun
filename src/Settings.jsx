@@ -17,7 +17,7 @@ export const emptyProfile = (name = '') => ({
 
 
 
-export default function Settings({ profile, user, mode, note, isSetup, hasFlights, onSave, onClose, onSample, onExport, onImport, onReset, onSignOut }) {
+export default function Settings({ profile, user, mode, note, isSetup, hasFlights, onSave, onClose, onSample, onFlighty, onExport, onImport, onReset, onSignOut }) {
   const [p, setP] = useState(() => ({ ...emptyProfile(user?.name || ''), ...(profile || {}), base: { ...emptyProfile().base, ...(profile?.base || {}) } }));
   const [rules, setRules] = useState(() => mergeRules(profile?.rules));
   const [imp, setImp] = useState('');
@@ -211,6 +211,7 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
               </>
             )}
             {msg && <div className="ai-note">{msg}</div>}
+            {onFlighty && <button className="btn sm sky" onClick={onFlighty}><Icon name="plane" size={15} />Flighty 기록 가져오기 (CSV)</button>}
             {confirmReset ? <button className="btn sm danger" onClick={onReset}>모든 항공편과 설정을 지웁니다</button> : <button className="btn sm danger" onClick={() => setConfirmReset(true)}><Icon name="trash" size={15} />전체 삭제</button>}
             {mode === 'firebase' && <button className="btn sm ghost" onClick={onSignOut}>로그아웃</button>}
           </div>

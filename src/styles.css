@@ -396,3 +396,35 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .sub-h + .trow { border-top: 0; }
 .more-btn { display: flex; align-items: center; justify-content: center; gap: 4px; width: calc(100% - 32px); margin: 8px 16px 4px; min-height: 44px; border-radius: 12px; background: var(--bg-2); color: var(--ink); font-size: 14px; font-weight: 700; }
 .notice.info { background: var(--sky-soft); color: var(--sky-ink); }
+/* 밀어서 삭제 */
+.swipe { position: relative; overflow: hidden; }
+.swipe-del { position: absolute; top: 0; right: 0; bottom: 0; width: 88px; display: grid; place-items: center; align-content: center; gap: 2px; background: var(--danger); color: #fff; font-size: 12px; font-weight: 700; opacity: 0; transition: opacity 0.15s; }
+.swipe.opening .swipe-del { opacity: 1; }
+.swipe-front { position: relative; z-index: 1; background: var(--panel); touch-action: pan-y; }
+.swipe + .swipe .frow::before, .gap + .swipe .frow::before, .rowwrap + .rowwrap .frow::before, .gap + .rowwrap .frow::before { content: ''; position: absolute; top: 0; left: 84px; right: 0; border-top: 1px solid var(--line); }
+.toast { display: flex; align-items: center; gap: 12px; }
+.toast-undo { color: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; padding: 2px 0; }
+.imp-link { display: block; margin: 10px auto 0; font-size: 13px; }
+/* Flighty 가져오기 */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.steps li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+.steps .n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--navy-btn); color: var(--navy-btn-ink); font-size: 13px; font-weight: 800; }
+.steps b { font-size: 15px; }
+.steps p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
+.steps p b { font-size: inherit; color: var(--ink); }
+.imp-groups { display: flex; flex-wrap: wrap; gap: 8px; }
+.imp-g { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.imp-g.on { background: var(--sky-soft); border-color: transparent; color: var(--sky-ink); }
+.imp-g b { color: inherit; }
+.ck { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line-2); display: grid; place-items: center; flex: none; background: var(--panel); color: #fff; }
+.imp-g.on .ck, .imp-row.on .ck { background: var(--sky); border-color: var(--sky); }
+.imp-year { padding: 12px 20px 4px; font-size: 12px; font-weight: 800; color: var(--ink-3); }
+.imp-row { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center; padding: 10px 20px; cursor: pointer; }
+.imp-row + .imp-row { border-top: 1px solid var(--line); }
+.imp-row input { position: absolute; opacity: 0; pointer-events: none; }
+.imp-row:not(.on) .mid, .imp-row:not(.on) .mi { opacity: 0.45; }
+.imp-row .mid { display: grid; min-width: 0; }
+.imp-row .t { font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.imp-row .s { font-size: 12px; color: var(--ink-3); }
+.imp-row .mi { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.toast-undo { white-space: nowrap; flex: none; }

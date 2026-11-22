@@ -118,14 +118,85 @@ function Gap({ prev, next }) {
   return <div className="gap">{city(prev.to)} <span>체류 {txt}</span></div>;
 }
 
-export function RowList({ list, ctx, selectedId, onOpen }) {
+export function RowList({ list, ctx, selectedId, onOpen, onDelete, swipe }) {
   const out = [];
   list.forEach((f, i) => {
     const prev = list[i - 1];
     if (prev && prev.tripId && prev.tripId === f.tripId) out.push(<Gap key={`g${f.id}`} prev={prev} next={f} />);
-    out.push(<FlightRow key={f.id} f={f} ctx={ctx} selected={selectedId === f.id} onClick={() => onOpen(f.id)} />);
+    const row = <FlightRow f={f} ctx={ctx} selected={selectedId === f.id} onClick={() => onOpen(f.id)} />;
+    out.push(onDelete ? <SwipeRow key={f.id} id={f.id} swipe={swipe} onDelete={onDelete}>{row}</SwipeRow> : <div key={f.id} className="rowwrap">{row}</div>);
   });
   return <div>{out}</div>;
+}
+
+// 왼쪽으로 밀면 삭제 버튼이 나옴 (한 번에 하나만 열림)
+const DEL_W = 88;
+function SwipeRow({ id, swipe, onDelete, children }) {
+  const open = swipe?.open === id;
+  const g = useRef(null);
+  const block = useRef(false);
+  const [dx, setDx] = useState(0);
+  const [drag, setDrag] = useState(false);
+  const base = open ? -DEL_W : 0;
+  const down = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    g.current = { x: e.clientX, y: e.clientY, axis: null };
+  };
+  const move = (e) => {
+    const s = g.current;
+    if (!s) return;
+    const mx = e.clientX - s.x, my = e.clientY - s.y;
+    if (!s.axis) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      s.axis = Math.abs(mx) > Math.abs(my) * 1.2 ? 'x' : 'y';
+      if (s.axis === 'x') {
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 무시 */ }
+        setDrag(true);
+        if (swipe.open && swipe.open !== id) swipe.setOpen(null);
+      }
+    }
+    if (s.axis !== 'x') return;
+    setDx(Math.max(-DEL_W - 36, Math.min(0, base + mx)) - base);
+  };
+  const up = () => {
+    const s = g.current;
+    g.current = null;
+    if (!s || s.axis !== 'x') return;
+    block.current = true;
+    const pos = base + dx;
+    setDrag(false);
+    setDx(0);
+    swipe.setOpen(pos < -DEL_W / 2 ? id : null);
+  };
+  const clickCapture = (e) => {
+    if (block.current) {
+      block.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+    } else if (open) {
+      e.preventDefault();
+      e.stopPropagation();
+      swipe.setOpen(null);
+    }
+  };
+  return (
+    <div className={`swipe ${open || drag ? 'opening' : ''}`}>
+      <button className="swipe-del" onClick={() => { swipe.setOpen(null); onDelete(id); }} tabIndex={open ? 0 : -1} aria-hidden={!open}>
+        <Icon name="trash" size={18} />삭제
+      </button>
+      <div
+        className="swipe-front"
+        style={{ transform: `translateX(${base + dx}px)`, transition: drag ? 'none' : 'transform .22s ease' }}
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        onClickCapture={clickCapture}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function Head({ title, right }) {
@@ -165,9 +236,11 @@ export function TierStrip({ goals, profile, onClick }) {
 }
 
 /* ───────── 항공편 목록 ───────── */
-export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onTier, head, banner }) {
+export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onTier, head, banner }) {
   const { flights, today } = ctx;
   const [showPast, setShowPast] = useState(false);
+  const [openId, setOpenId] = useState(null);
+  const swipe = { open: openId, setOpen: setOpenId };
   const sorted = useMemo(() => sortFlights(flights), [flights]);
   const upcoming = sorted.filter((f) => f.date >= today);
   const past = sorted.filter((f) => f.date < today).reverse();
@@ -187,19 +260,22 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
           <h2>첫 항공편을 추가해 보세요</h2>
           <p>편명과 구간만 넣으면 스카이패스 적립 마일과 등급 진행률이 바로 계산돼요.</p>
           <button className="btn primary" onClick={onAdd}><Icon name="plus" size={18} />항공편 추가</button>
+          {onFlighty && <button className="btn sky sm" onClick={onFlighty}>Flighty 기록 가져오기</button>}
           <button className="btn ghost sm" onClick={onSample}>예시 데이터로 둘러보기</button>
         </div>
       ) : (
         <>
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{upcoming.length}편</span></div>
-          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>예정된 항공편이 없어요.</p>}
+          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>예정된 항공편이 없어요.</p>}
           {past.length > 0 && (
             <>
               <div className="section-h"><span>지난 항공편</span><span className="faint num">{past.length}편</span></div>
-              <RowList list={showPast ? past : past.slice(0, 4)} ctx={ctx} selectedId={selectedId} onOpen={onOpen} />
+              <RowList list={showPast ? past : past.slice(0, 4)} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} />
               {past.length > 4 && <button className="btn sm ghost more" onClick={() => setShowPast((v) => !v)}>{showPast ? '접기' : `지난 항공편 ${past.length - 4}편 더 보기`}</button>}
             </>
           )}
+          {onDelete && <p className="help" style={{ margin: '14px 20px 0', textAlign: 'center' }}>항공편을 왼쪽으로 밀면 바로 삭제할 수 있어요.</p>}
+          {onFlighty && <button className="link imp-link" onClick={onFlighty}>Flighty 기록 가져오기</button>}
         </>
       )}
     </>
