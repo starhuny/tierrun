@@ -56,6 +56,19 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
     }
   };
 
+  const z = (keys) => keys.every((k) => !(+p.base[k] > 0));
+  const startTxt = p.periodStart ? `(${p.periodStart.replaceAll('-', '.')})` : '';
+  const zeroNote =
+    p.tier === 'SKYPASS' && z(BASE_KEYS.SKYPASS)
+      ? '지금은 실적이 0이에요. 앱에 추가한 항공편만 계산되니, 스카이패스 가입 후 탄 대한항공·제휴 항공편을 처음부터 빠짐없이 추가해 주세요.'
+      : periodic && z(['perKE', 'perST', 'perOT', 'perPts'])
+        ? `지금은 ②가 0이에요. 앱에 추가한 항공편만 계산되니, 등급 시작일${startTxt} 이후 탄 항공편을 처음부터 빠짐없이 추가해 주세요.${z(['preKE']) ? ' ①도 0이면 프리미엄·밀리언 마일러 진행률은 시작일 이전 항공편까지 추가해야 맞아요.' : ''}`
+        : periodic && z(['preKE'])
+          ? '①이 0이에요. 모닝캄 프리미엄·밀리언 마일러 진행률을 맞추려면 등급 시작일 이전 항공편도 추가하거나 ①에 누적 마일을 넣어 주세요.'
+          : p.tier === 'MCP' && z(['lifeKE'])
+            ? '평생 누적이 0이에요. 지금까지 탄 항공편을 처음부터 추가하거나 평생 누적 마일을 넣어 주세요.'
+            : null;
+
   const num = (k, label, suffix = '마일') => (
     <label className="field" key={k}><span>{label}</span><NumInput value={p.base[k]} suffix={suffix} placeholder="0" onChange={(v) => setB(k, v)} /></label>
   );
@@ -70,7 +83,7 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
       <div className="form">
         {isSetup && (
           <div className="card" style={{ background: 'var(--sky-soft)', border: 0 }}>
-            <p style={{ margin: 0, fontSize: 14 }}>현재 등급과 등급 시작일만 넣으면 시작할 수 있어요. 실적 숫자는 대한항공 홈페이지 <b>마이페이지 › 마일리지 현황</b>에서 옮겨 적거나, <b>0으로 비워 두고 지난 항공편을 앱에서 하나씩 추가</b>해도 돼요.</p>
+            <p style={{ margin: 0, fontSize: 14 }}>현재 등급과 등급 시작일만 넣으면 시작할 수 있어요. 실적 숫자는 대한항공 홈페이지 <b>마이페이지 › 마일리지 현황</b>에서 옮겨 적거나, <b>0으로 비워 두고 지난 항공편을 앱에서 하나씩 추가</b>해도 돼요. 0으로 두면 앱에 추가한 항공편만 계산되니, 그때는 <b>등급 시작일 이후 탄 항공편을 처음부터 빠짐없이</b> 넣어 주세요.</p>
           </div>
         )}
         <label className="field"><span>이름</span><input className="input" value={p.name} placeholder="표시할 이름" onChange={(e) => set({ name: e.target.value })} /></label>
@@ -106,6 +119,7 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
         <div className="segcard">
           <div className="sh">지금까지 탄 실적</div>
           <p className="help" style={{ margin: 0 }}>모르면 <b>0으로 비워 두고</b>, 지난 항공편을 앱에서 ‘항공편 추가’로 넣어도 똑같이 계산돼요. 숫자를 넣으면 오늘 이전 날짜의 항공편은 그 숫자에 들어 있는 걸로 보고 중복 계산하지 않아요.</p>
+          {zeroNote && <div className="notice">{zeroNote}</div>}
           {p.tier === 'SKYPASS' && (
             <>
               <div className="lab">스카이패스 가입 후 지금까지</div>

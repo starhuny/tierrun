@@ -347,3 +347,6 @@ details.adv summary { font-weight: 700; cursor: pointer; font-size: 14px; }
 .badge.cabin-W { background: var(--sky-soft); color: var(--sky-ink); }
 .badge.cabin-C { background: var(--navy-btn); color: var(--navy-btn-ink); }
 .badge.cabin-F { background: light-dark(#f3e6cf, #4a3a1c); color: light-dark(#7a5517, #f3d59a); }
+.notice { border-radius: 14px; padding: 11px 13px; font-size: 13px; line-height: 1.55; background: light-dark(#fdf3e4, #3a2c14); color: light-dark(#7a4a0c, #f5cf8f); }
+.notice b { color: inherit; }
+.notice .link { color: inherit; }

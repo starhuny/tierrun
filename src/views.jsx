@@ -3,7 +3,7 @@ import { findAirport } from './airports.js';
 import { AIRLINE, CREDIT, TIER, TIERS, CABIN } from './skypass.js';
 import {
   fmtDate, fmtDot, fmtNum, fmtWon, fmtWonShort, daysBetween, earnedMiles, flightPoints, flightCost, layover, fmtDuration,
-  sortFlights, contributionOf, SOURCE_LABEL, isDomesticKR, tripFlights, cabinOf, baselineDate,
+  sortFlights, contributionOf, SOURCE_LABEL, isDomesticKR, tripFlights, cabinOf, baselineDate, BASE_KEYS,
 } from './core.js';
 import { Icon, AirlineMark, Bar, Ring, Avatar } from './ui.jsx';
 import Globe from './Globe.jsx';
@@ -364,6 +364,18 @@ export function TierView({ ctx, goals, stats, head, onSettings }) {
         </div>
       </div>
 
+      {(() => {
+        const t = profile?.tier || 'SKYPASS';
+        const keys = t === 'MC' || t === 'MCS' ? ['perKE', 'perST', 'perOT', 'perPts'] : BASE_KEYS[t] || [];
+        if (!keys.length || keys.some((k) => +profile?.base?.[k] > 0)) return null;
+        const since = t === 'MC' || t === 'MCS' ? `등급 시작일${profile?.periodStart ? `(${fmtDot(profile.periodStart)})` : ''} 이후` : t === 'SKYPASS' ? '스카이패스 가입 후' : '지금까지';
+        return (
+          <div className="notice" style={{ margin: '12px 16px 0' }}>
+            실적 숫자를 0으로 두었어요. 앱에 추가한 항공편만 계산되니, {since} 탄 항공편을 <b>처음부터 빠짐없이</b> 추가해야 진행률이 정확해요.{' '}
+            <button className="link" onClick={onSettings}>실적 입력</button>
+          </div>
+        );
+      })()}
       {h ? (
         <div className="goal">
           <h3>{TIER[h.target].name}까지</h3>
