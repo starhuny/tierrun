@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { TIERS, DEFAULT_RULES } from './skypass.js';
-import { todayISO, mergeRules, fmtNum } from './core.js';
+import { todayISO, mergeRules, fmtNum, BASE_KEYS } from './core.js';
 import { Icon, NumInput } from './ui.jsx';
 
 const twoYearsEnd = (start) => {
@@ -15,14 +15,7 @@ export const emptyProfile = (name = '') => ({
   base: { preKE: null, perKE: null, perST: null, perOT: null, perPts: null, lifeKE: null, lifeST: null, lifeOT: null, lifePts: null }, rules: {},
 });
 
-// 등급별로 화면에 쓰는 실적 칸
-const BASE_KEYS = {
-  SKYPASS: ['lifeKE', 'lifeST', 'lifeOT', 'lifePts'],
-  MC: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
-  MCS: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
-  MCP: ['lifeKE'],
-  MM: [],
-};
+
 
 export default function Settings({ profile, user, mode, note, isSetup, hasFlights, onSave, onClose, onSample, onExport, onImport, onReset, onSignOut }) {
   const [p, setP] = useState(() => ({ ...emptyProfile(user?.name || ''), ...(profile || {}), base: { ...emptyProfile().base, ...(profile?.base || {}) } }));

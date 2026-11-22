@@ -3,7 +3,7 @@ import { findAirport } from './airports.js';
 import { AIRLINE, CREDIT, TIER, TIERS, CABIN } from './skypass.js';
 import {
   fmtDate, fmtDot, fmtNum, fmtWon, fmtWonShort, daysBetween, earnedMiles, flightPoints, flightCost, layover, fmtDuration,
-  sortFlights, contributionOf, SOURCE_LABEL, isDomesticKR, tripFlights, cabinOf,
+  sortFlights, contributionOf, SOURCE_LABEL, isDomesticKR, tripFlights, cabinOf, baselineDate,
 } from './core.js';
 import { Icon, AirlineMark, Bar, Ring, Avatar } from './ui.jsx';
 import Globe from './Globe.jsx';
@@ -28,7 +28,8 @@ export function FlightRow({ f, ctx, selected, onClick }) {
   const e = earnedMiles(f);
   const p = flightPoints(f);
   const c = flightCost(f, flights, trips);
-  const excluded = profile?.baseDate && f.date <= profile.baseDate;
+  const bd = baselineDate(profile);
+  const excluded = bd && f.date <= bd;
   return (
     <button className={`frow ${selected ? 'sel' : ''}`} onClick={onClick}>
       <DDay f={f} today={today} />
@@ -233,7 +234,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
           </div>
         )}
         {contrib.excluded && f.credit !== 'NONE' && (
-          <div className="card"><p className="muted" style={{ margin: 0, fontSize: 14 }}>설정에 입력한 실적({fmtDot(profile.baseDate)}까지)에 이미 들어 있는 항공편이라 중복 계산하지 않아요. 비용·단가 통계에는 그대로 들어가요.</p></div>
+          <div className="card"><p className="muted" style={{ margin: 0, fontSize: 14 }}>설정에 입력한 실적({fmtDot(baselineDate(profile))}까지)에 이미 들어 있는 항공편이라 중복 계산하지 않아요. 비용·단가 통계에는 그대로 들어가요.</p></div>
         )}
 
         <div className="card">
@@ -413,7 +414,7 @@ export function TierView({ ctx, goals, stats, head, onSettings }) {
 
       <p className="basis">
         {profile?.tier === 'MC' || profile?.tier === 'MCS' ? '등급 시작일 이후 실적은 설정에 입력한 숫자와 여기 추가한 항공편을 더해 계산해요. ' : '설정에 입력한 실적과 여기 추가한 항공편을 더해 계산해요. '}
-        {profile?.baseDate ? `입력한 숫자는 ${fmtDot(profile.baseDate)}까지의 실적으로 보고, 그 전 날짜의 항공편은 중복 계산하지 않아요. ` : ''}
+        {baselineDate(profile) ? `입력한 숫자는 ${fmtDot(baselineDate(profile))}까지의 실적으로 보고, 그 전 날짜의 항공편은 중복 계산하지 않아요. ` : ''}
         탑승일이 지난 항공편은 확정, 남은 항공편은 예정으로 봐요. 실제 적립·등급은 대한항공 기준이 우선이에요.{' '}
         <button className="link" onClick={onSettings}>실적 수정</button>
       </p>

@@ -152,6 +152,21 @@ export function fmtDuration(min) {
 }
 
 /* ───────── 등급 계산 ───────── */
+// 등급별로 설정 화면에서 받는 실적 칸
+export const BASE_KEYS = {
+  SKYPASS: ['lifeKE', 'lifeST', 'lifeOT', 'lifePts'],
+  MC: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
+  MCS: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
+  MCP: ['lifeKE'],
+  MM: [],
+};
+// 입력한 실적 숫자가 있을 때만 그 날짜 이전 항공편을 중복으로 보고 뺌
+export function baselineDate(profile) {
+  if (!profile?.baseDate) return '';
+  const b = profile.base || {};
+  const keys = [...(BASE_KEYS[profile.tier || 'SKYPASS'] || []), ...((profile.tier === 'MC' || profile.tier === 'MCS') && b.preKE == null ? ['lifeKE'] : [])];
+  return keys.some((k) => +b[k] > 0) ? profile.baseDate : '';
+}
 export function mergeRules(r) {
   const out = {};
   for (const k of Object.keys(DEFAULT_RULES)) out[k] = { ...DEFAULT_RULES[k], ...(r?.[k] || {}) };
@@ -173,7 +188,7 @@ export function tally(profile, flights, today) {
   } else {
     life.conf = { ke: n('lifeKE'), st: n('lifeST'), ot: n('lifeOT'), pts: n('lifePts') };
   }
-  const baseDate = profile?.baseDate || '';
+  const baseDate = baselineDate(profile);
   const ps = profile?.periodStart || '0000-00-00';
   const pe = profile?.periodEnd || '9999-12-31';
   const counted = [];
@@ -295,7 +310,8 @@ export function contributionOf(f, profile) {
   const e = earnedMiles(f);
   const p = flightPoints(f);
   const out = [];
-  if (f.credit === 'NONE' || (profile?.baseDate && f.date <= profile.baseDate)) return { miles: e, points: p, rows: out, excluded: true };
+  const bd = baselineDate(profile);
+  if (f.credit === 'NONE' || (bd && f.date <= bd)) return { miles: e, points: p, rows: out, excluded: true };
   const R = mergeRules(profile?.rules);
   const inPeriod = (!profile?.periodStart || f.date >= profile.periodStart) && (!profile?.periodEnd || f.date <= profile.periodEnd);
   const tier = profile?.tier || 'SKYPASS';
