@@ -4,7 +4,7 @@ import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
 import { lookupFlight, LOOKUP_SOURCE } from './lookup.js';
-import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark } from './ui.jsx';
+import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark, DateInput } from './ui.jsx';
 
 const blank = (o = {}) => ({
   key: uid(), id: null, airline: 'KE', flightNo: '', date: '', dep: '', arr: '', arrOffset: 0, from: '', to: '', cls: '',
@@ -227,11 +227,12 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
   const [custom, setCustom] = useState(!known && !!s.airline);
   const [lk, setLk] = useState(null); // { busy } | { ok, text, source, legs }
 
-  const applyLeg = (leg, source, note) => {
-    onChange({ from: leg.from, to: leg.to, dep: leg.dep || '', arr: leg.arr || '', arrOffset: +leg.arrOffset || 0, ...(leg.date && !s.date ? { date: leg.date } : {}) });
+  // 편명으로는 출발·도착 공항만 채우고, 시각은 직접 입력
+  const applyLeg = (leg, source) => {
+    onChange({ from: leg.from, to: leg.to });
     const name = (c) => findAirport(c)?.city || c;
     const unknown = [leg.from, leg.to].filter((c) => !findAirport(c));
-    setLk({ ok: true, source, text: `${name(leg.from)} → ${name(leg.to)}${leg.dep ? ` · ${leg.dep}${leg.arr ? `–${leg.arr}${+leg.arrOffset ? ` (+${leg.arrOffset})` : ''}` : ''}` : ''} 채웠어요.${source === 'ai' ? ' AI 추정이라 맞는지 확인해 주세요.' : ''}${unknown.length ? ` ${unknown.join('·')}은 공항 목록에 없어 구간 마일을 직접 넣어야 해요.` : ''}${note && source === 'ai' ? ` ${note}` : ''}` });
+    setLk({ ok: true, source, text: `${name(leg.from)} → ${name(leg.to)} 채웠어요.${source === 'ai' ? ' AI 추정이라 맞는지 확인해 주세요.' : ''}${unknown.length ? ` ${unknown.join('·')}은 공항 목록에 없어 구간 마일을 직접 넣어야 해요.` : ''}` });
   };
   const lookup = async () => {
     if (!s.airline || !s.flightNo) return setLk({ ok: false, text: '항공사와 편명을 먼저 넣어 주세요.' });
@@ -241,8 +242,8 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
       const legs = r.legs || [];
       if (!legs.length) return setLk({ ok: false, text: `${s.airline}${s.flightNo} 운항 정보를 찾지 못했어요. 출발·도착을 직접 골라 주세요.` });
       const pick = legs.length === 1 ? legs[0] : legs.find((l) => s.from && l.from === s.from) || null;
-      if (pick) return applyLeg(pick, r.source, r.note);
-      setLk({ ok: true, source: r.source, legs, note: r.note, text: '여러 구간을 운항하는 편명이에요. 탄 구간을 골라 주세요.' });
+      if (pick) return applyLeg(pick, r.source);
+      setLk({ ok: true, source: r.source, legs, text: '여러 구간을 운항하는 편명이에요. 탄 구간을 골라 주세요.' });
     } catch (e) {
       setLk({ ok: false, text: e.message || '조회에 실패했어요.' });
     }
@@ -289,8 +290,8 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
           {lk.legs && (
             <div className="legs">
               {lk.legs.map((l) => (
-                <button key={l.from + l.to} type="button" className="chip-btn num" onClick={() => applyLeg(l, lk.source, lk.note)}>
-                  {l.from} → {l.to}{l.dep ? ` ${l.dep}` : ''}
+                <button key={l.from + l.to} type="button" className="chip-btn num" onClick={() => applyLeg(l, lk.source)}>
+                  {l.from} → {l.to}
                 </button>
               ))}
             </div>
@@ -306,7 +307,7 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
       <div className="row2" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)' }}>
         <label className="field">
           <span>날짜</span>
-          <input className="input num" type="date" value={s.date} onChange={(ev) => onChange({ date: ev.target.value })} style={err.date ? { borderColor: 'var(--danger)' } : null} />
+          <DateInput value={s.date} onChange={(v) => onChange({ date: v })} invalid={err.date} />
         </label>
         <label className="field">
           <span>예약 등급 <span className="faint">(선택)</span></span>
@@ -319,8 +320,8 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
         <Seg small light options={CABINS.map((c) => [c.id, c.name])} value={s.cabin || 'Y'} onChange={(v) => onChange(s.cls ? { cabin: v } : { cabin: v, rate: CABIN[v].rate })} />
       </div>
       <div className="row3" style={{ gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
-        <label className="field"><span>출발 시각</span><input className="input num" type="time" value={s.dep} onChange={(ev) => onChange({ dep: ev.target.value })} /></label>
-        <label className="field"><span>도착 시각</span><input className="input num" type="time" value={s.arr} onChange={(ev) => onChange({ arr: ev.target.value })} /></label>
+        <label className="field"><span>출발 시각</span><DateInput type="time" value={s.dep} onChange={(v) => onChange({ dep: v })} /></label>
+        <label className="field"><span>도착 시각</span><DateInput type="time" value={s.arr} onChange={(v) => onChange({ arr: v })} /></label>
         <label className="field"><span>도착일</span>
           <select className="input" value={s.arrOffset} onChange={(ev) => onChange({ arrOffset: +ev.target.value })}>
             <option value={-1}>−1일</option><option value={0}>당일</option><option value={1}>+1일</option><option value={2}>+2일</option>

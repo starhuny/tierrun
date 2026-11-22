@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TIERS, DEFAULT_RULES } from './skypass.js';
 import { todayISO, mergeRules, fmtNum, BASE_KEYS } from './core.js';
-import { Icon, NumInput } from './ui.jsx';
+import { Icon, NumInput, DateInput } from './ui.jsx';
 
 const twoYearsEnd = (start) => {
   if (!start) return '';
@@ -12,7 +12,7 @@ const twoYearsEnd = (start) => {
 
 export const emptyProfile = (name = '') => ({
   name, tier: 'MC', periodStart: '', periodEnd: '', baseDate: '',
-  base: { preKE: null, perKE: null, perST: null, perOT: null, perPts: null, lifeKE: null, lifeST: null, lifeOT: null, lifePts: null }, rules: {},
+  base: { preKE: null, preOZ: null, perKE: null, perST: null, perOT: null, perPts: null, lifeKE: null, lifeST: null, lifeOT: null, lifePts: null, lifeOZ: null }, rules: {},
 });
 
 
@@ -62,8 +62,8 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
     p.tier === 'SKYPASS' && z(BASE_KEYS.SKYPASS)
       ? '지금은 실적이 0이에요. 앱에 추가한 항공편만 계산되니, 스카이패스 가입 후 탄 대한항공·제휴 항공편을 처음부터 빠짐없이 추가해 주세요.'
       : periodic && z(['perKE', 'perST', 'perOT', 'perPts'])
-        ? `지금은 ②가 0이에요. 앱에 추가한 항공편만 계산되니, 등급 시작일${startTxt} 이후 탄 항공편을 처음부터 빠짐없이 추가해 주세요.${z(['preKE']) ? ' ①도 0이면 프리미엄·밀리언 마일러 진행률은 시작일 이전 항공편까지 추가해야 맞아요.' : ''}`
-        : periodic && z(['preKE'])
+        ? `지금은 ②가 0이에요. 앱에 추가한 항공편만 계산되니, 등급 시작일${startTxt} 이후 탄 항공편을 처음부터 빠짐없이 추가해 주세요.${z(['preKE', 'preOZ']) ? ' ①도 0이면 프리미엄·밀리언 마일러 진행률은 시작일 이전 항공편까지 추가해야 맞아요.' : ''}`
+        : periodic && z(['preKE', 'preOZ'])
           ? '①이 0이에요. 모닝캄 프리미엄·밀리언 마일러 진행률을 맞추려면 등급 시작일 이전 항공편도 추가하거나 ①에 누적 마일을 넣어 주세요.'
           : p.tier === 'MCP' && z(['lifeKE'])
             ? '평생 누적이 0이에요. 지금까지 탄 항공편을 처음부터 추가하거나 평생 누적 마일을 넣어 주세요.'
@@ -102,10 +102,10 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
             <div className="sh">등급 시작일</div>
             <label className="field">
               <span>{p.tier === 'MC' ? '모닝캄' : '모닝캄 셀렉트'}이 된 날</span>
-              <input className="input num" type="date" value={p.periodStart} onChange={(e) => set({ periodStart: e.target.value, periodEnd: editEnd ? p.periodEnd : twoYearsEnd(e.target.value) })} />
+              <DateInput value={p.periodStart} onChange={(v) => set({ periodStart: v, periodEnd: editEnd ? p.periodEnd : twoYearsEnd(v) })} />
             </label>
             {editEnd ? (
-              <label className="field"><span>자격 종료일</span><input className="input num" type="date" value={p.periodEnd} onChange={(e) => set({ periodEnd: e.target.value })} /></label>
+              <label className="field"><span>자격 종료일</span><DateInput value={p.periodEnd} onChange={(v) => set({ periodEnd: v })} /></label>
             ) : (
               <p className="help" style={{ margin: 0 }}>
                 {p.periodStart ? <>자격은 <b>{(p.periodEnd || twoYearsEnd(p.periodStart)).replaceAll('-', '.')}</b>까지예요 (시작일로부터 2년 뒤 달 말일). </> : '시작일을 넣으면 종료일은 2년 뒤 달 말일로 자동 계산돼요. '}
@@ -130,14 +130,20 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
           {periodic && (
             <>
               <div className="lab">① 등급 시작일 이전에 탄 것 (평생 누적용)</div>
-              {num('preKE', '대한항공 + 스카이팀 탑승 마일')}
+              <div className="row2">{num('preKE', '대한항공 + 스카이팀 탑승 마일')}{num('preOZ', '아시아나 탑승 마일')}</div>
+              <p className="help" style={{ margin: 0 }}>아시아나는 아시아나클럽의 <b>탑승 마일만</b> 넣어 주세요 (카드·제휴 적립 제외). 대한항공이 통합 후 아시아나 운항편 탑승 마일도 우수회원 심사에 합산한다고 안내해서 평생 누적에 더해요.</p>
               <div className="lab" style={{ marginTop: 4 }}>② 등급 시작일 이후에 탄 것</div>
               <div className="row2">{num('perKE', '대한항공 탑승 마일')}{num('perPts', '탑승 횟수 포인트', 'P')}</div>
               <div className="row2">{num('perST', '스카이팀 탑승 마일')}{num('perOT', '기타 제휴 항공사 마일')}</div>
               <p className="help" style={{ margin: 0 }}>①은 모닝캄 프리미엄(평생 50만)·밀리언 마일러 진행률에, ②는 모닝캄 유지·셀렉트 승급에 쓰여요. 모닝캄 유지의 ‘대한항공 편 2만 마일’ 조건은 대한항공 칸만 세요.</p>
             </>
           )}
-          {p.tier === 'MCP' && num('lifeKE', '평생 누적 탑승 마일 (대한항공 + 스카이팀)')}
+          {p.tier === 'MCP' && (
+            <>
+              <div className="row2">{num('lifeKE', '평생 탑승 마일 (대한항공 + 스카이팀)')}{num('lifeOZ', '아시아나 탑승 마일')}</div>
+              <p className="help" style={{ margin: 0 }}>아시아나는 아시아나클럽의 탑승 마일만 넣어 주세요. 밀리언 마일러 평생 누적에 더해요.</p>
+            </>
+          )}
           {p.tier === 'MM' && <p className="help" style={{ margin: 0 }}>밀리언 마일러는 평생 등급이라 추가 목표가 없어요. 항공편 기록과 단가 계산은 그대로 쓸 수 있어요.</p>}
         </div>
 

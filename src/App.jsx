@@ -6,7 +6,7 @@ import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
 import Settings, { emptyProfile } from './Settings.jsx';
-import { FlightsView, DetailView, TierView, CostView, Head, FlightRow } from './views.jsx';
+import { FlightsView, DetailView, TierView, CostView, Head, MapStrip } from './views.jsx';
 import { Icon, Avatar } from './ui.jsx';
 
 function useMedia(q) {
@@ -207,7 +207,7 @@ export default function App() {
   const view = setupNeeded ? { name: 'settings', setup: true } : stack;
   const panelW = Math.min(420, Math.max(340, vw * 0.31));
   const onMap = mobile && tab === 'map' && !view;
-  const selFlight = sel ? flights.find((f) => f.id === sel) : sortFlights(flights).find((f) => f.date >= today) || null;
+  const selFlight = (sel && flights.find((f) => f.id === sel)) || sortFlights(flights).find((f) => f.date >= today) || sortFlights(flights).at(-1) || null;
   const avatar = <Avatar user={ad?.user} name={profile?.name} onClick={() => setStack({ name: 'settings' })} />;
   const banner =
     profile?.sample ? (
@@ -342,11 +342,7 @@ export default function App() {
         {!mobile && tabbar}
       </aside>
       {mobile && tabbar}
-      {onMap && selFlight && (
-        <div className="map-card fade-in">
-          <FlightRow f={selFlight} ctx={ctx} onClick={() => open(selFlight.id)} />
-        </div>
-      )}
+      {onMap && selFlight && <MapStrip ctx={ctx} selId={selFlight.id} onSel={setSel} onOpen={open} />}
       {onMap && !flights.length && (
         <div className="map-card" style={{ padding: 16 }}>
           <p style={{ margin: 0 }} className="muted">항공편을 추가하면 노선이 지구본에 그려져요.</p>

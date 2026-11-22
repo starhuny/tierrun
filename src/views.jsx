@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { findAirport } from './airports.js';
 import { AIRLINE, CREDIT, TIER, TIERS, CABIN } from './skypass.js';
 import {
@@ -54,6 +54,60 @@ export function FlightRow({ f, ctx, selected, onClick }) {
         </div>
       </div>
     </button>
+  );
+}
+
+// 지도 아래 항공편 카드: 옆으로 넘기면 지난·다음 항공편
+export function MapStrip({ ctx, selId, onSel, onOpen }) {
+  const list = useMemo(() => sortFlights(ctx.flights), [ctx.flights]);
+  const ref = useRef(null);
+  const timer = useRef(0);
+  const first = useRef(true);
+  const idx = Math.max(0, list.findIndex((f) => f.id === selId));
+  const [shown, setShown] = useState(idx);
+
+  // 선택이 바뀌면(지도에서 노선을 눌렀을 때 등) 그 카드로 이동
+  useEffect(() => {
+    const el = ref.current;
+    const c = el?.children[idx];
+    if (!c) return;
+    const left = c.offsetLeft - (el.clientWidth - c.clientWidth) / 2;
+    if (Math.abs(el.scrollLeft - left) > 2) el.scrollTo({ left, behavior: first.current ? 'auto' : 'smooth' });
+    first.current = false;
+    setShown(idx);
+  }, [idx, list.length]);
+
+  const settle = () => {
+    const el = ref.current;
+    if (!el) return;
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = 0, bd = Infinity;
+    [...el.children].forEach((c, i) => {
+      const d = Math.abs(c.offsetLeft + c.clientWidth / 2 - mid);
+      if (d < bd) { bd = d; best = i; }
+    });
+    setShown(best);
+    const f = list[best];
+    if (f && f.id !== selId) onSel(f.id);
+  };
+  const onScroll = () => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(settle, 140);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  if (!list.length) return null;
+  return (
+    <div className="map-strip-wrap">
+      {list.length > 1 && <div className="map-count num">{shown + 1} / {list.length}</div>}
+      <div className="map-strip" ref={ref} onScroll={onScroll}>
+        {list.map((f) => (
+          <div key={f.id} className="map-slide">
+            <FlightRow f={f} ctx={ctx} onClick={() => onOpen(f.id)} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

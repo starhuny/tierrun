@@ -1,11 +1,10 @@
 // Vercel 서버 함수: GET /api/flight?airline=KE&no=17&date=2026-12-01
-// → { source: 'live' | 'ai', legs: [{ from, to, date, dep, arr, arrOffset, aircraft }], note }
+// → { source: 'live' | 'ai', legs: [{ from, to }], note }   (출발·도착 공항만, 시각은 사용자가 직접 입력)
 // 환경 변수
 //   AERODATABOX_KEY : RapidAPI의 AeroDataBox 키 (있으면 실제 운항 정보로 조회)
 //   GEMINI_API_KEY  : 없을 때 AI(구글 검색 참고)로 추정
 // 같은 조회는 Vercel CDN에 하루 동안 캐시돼 무료 한도를 아껴요.
 
-const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 function splitLocal(s) {
   const m = String(s || '').match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
@@ -25,23 +24,12 @@ async function fromAeroDataBox(code, date) {
   const legs = arr
     .map((x) => {
       const d = splitLocal(x?.departure?.scheduledTime?.local || x?.departure?.scheduledTimeLocal);
-      const a = splitLocal(x?.arrival?.scheduledTime?.local || x?.arrival?.scheduledTimeLocal);
-      return {
-        from: x?.departure?.airport?.iata || '',
-        to: x?.arrival?.airport?.iata || '',
-        fromName: x?.departure?.airport?.municipalityName || x?.departure?.airport?.name || '',
-        toName: x?.arrival?.airport?.municipalityName || x?.arrival?.airport?.name || '',
-        date: d.date,
-        dep: d.time,
-        arr: a.time,
-        arrOffset: d.date && a.date ? dayDiff(d.date, a.date) : 0,
-        aircraft: x?.aircraft?.model || '',
-      };
+      return { from: x?.departure?.airport?.iata || '', to: x?.arrival?.airport?.iata || '', date: d.date };
     })
     .filter((l) => l.from && l.to);
   // 같은 구간이 여러 번(코드셰어 등) 나오면 하나만
   const seen = new Set();
-  return { legs: legs.filter((l) => (seen.has(l.from + l.to + l.date) ? false : seen.add(l.from + l.to + l.date))) };
+  return { legs: legs.filter((l) => (seen.has(l.from + l.to) ? false : seen.add(l.from + l.to))).map(({ from, to }) => ({ from, to })) };
 }
 
 async function gemini(prompt, grounded) {
@@ -63,11 +51,10 @@ async function gemini(prompt, grounded) {
 }
 
 async function fromAI(airline, no, date) {
-  const prompt = `항공편 ${airline}${no}${date ? `의 ${date} 운항` : ''} 정보를 알려줘. 현재 정기 스케줄 기준으로, 확실하지 않으면 지어내지 말고 found를 false로.
+  const prompt = `항공편 ${airline}${no}${date ? `(${date} 운항)` : ''}의 출발·도착 공항을 알려줘. 현재 정기 스케줄 기준으로, 확실하지 않으면 지어내지 말고 found를 false로.
 경유편(한 편명으로 여러 구간)이라면 legs에 구간을 순서대로 모두 넣어.
-시각은 각 공항의 현지 시각 HH:MM, arrOffset은 도착 현지 날짜 - 출발 현지 날짜(일).
 JSON 하나만 출력 (설명·코드펜스 금지):
-{"found": true|false, "legs": [{"from": "ICN", "to": "LAX", "dep": "HH:MM"|null, "arr": "HH:MM"|null, "arrOffset": 0, "aircraft": string|null}], "note": "한국어 한 줄"}`;
+{"found": true|false, "legs": [{"from": "ICN", "to": "LAX"}], "note": "한국어 한 줄"}`;
   let j;
   try {
     j = await gemini(prompt, true);
@@ -75,7 +62,7 @@ JSON 하나만 출력 (설명·코드펜스 금지):
     j = await gemini(prompt, false);
   }
   const legs = (j?.found === false ? [] : j?.legs || [])
-    .map((l) => ({ from: String(l.from || '').toUpperCase(), to: String(l.to || '').toUpperCase(), date: date || '', dep: l.dep || '', arr: l.arr || '', arrOffset: +l.arrOffset || 0, aircraft: l.aircraft || '' }))
+    .map((l) => ({ from: String(l.from || '').toUpperCase(), to: String(l.to || '').toUpperCase() }))
     .filter((l) => /^[A-Z]{3}$/.test(l.from) && /^[A-Z]{3}$/.test(l.to));
   return { legs, note: j?.note || '' };
 }

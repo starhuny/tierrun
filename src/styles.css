@@ -362,3 +362,27 @@ details.adv summary { font-weight: 700; cursor: pointer; font-size: 14px; }
 .lookup .legs { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
 .chip-btn { border: 1px solid var(--line); background: var(--bg-1, transparent); color: var(--ink); border-radius: 99px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .chip-btn:hover { border-color: var(--sky); }
+/* 지도 아래 항공편 카드 (옆으로 넘기기) */
+.map-strip-wrap { position: fixed; left: 0; right: 0; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 6; }
+.map-count { position: absolute; right: 22px; top: -26px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; color: var(--ink-2); background: light-dark(rgba(255, 255, 255, 0.85), rgba(20, 28, 64, 0.85)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.map-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding: 6px 18px 10px; scroll-padding: 0 18px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.map-strip::-webkit-scrollbar { display: none; }
+.map-slide { flex: 0 0 calc(100% - 36px); scroll-snap-align: center; scroll-snap-stop: always; background: var(--panel); border-radius: 22px; box-shadow: var(--shadow); }
+.map-slide .frow { padding-right: 16px; }
+.map-strip .map-slide:only-child { flex-basis: 100%; }
+/* ── 모바일(iOS) 입력칸 정리 ── */
+.field, .field > *, .dtw { min-width: 0; }
+input.input, select.input { height: 46px; }
+.field > span.dtw, .dtw { position: relative; display: block; padding: 0; font-size: inherit; font-weight: inherit; color: inherit; }
+.dtw .input { display: block; width: 100%; max-width: 100%; -webkit-appearance: none; appearance: none; text-align: left; line-height: 44px; padding-top: 0; padding-bottom: 0; }
+.dtw .input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.dtw .input::-webkit-calendar-picker-indicator { margin-left: auto; opacity: 0.55; }
+.dt-ph { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; font-weight: 500; }
+.dtw.blank .input::-webkit-datetime-edit { color: transparent; }
+.dtw.blank:focus-within .input::-webkit-datetime-edit { color: inherit; }
+.dtw.blank:focus-within .dt-ph { display: none; }
+select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%237a869e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; text-overflow: ellipsis; }
+/* iOS는 16px 미만 입력칸을 누르면 화면을 확대해서 모바일에선 16px */
+.app.mob .input { font-size: 16px; }
+/* 하단 고정 바가 있는 화면은 스크롤 아래 여백을 없애 바가 맨 아래에 붙도록 */
+.app.mob .scroll.no-tabs:has(.sumbar) { padding-bottom: 0; }

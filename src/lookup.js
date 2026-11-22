@@ -1,5 +1,6 @@
 // 편명으로 출발·도착 찾기
-//  1) 내가 전에 넣은 같은 편명 (바로, 무료)
+//  출발·도착 공항만 채움 (시각은 사용자가 직접 입력)
+//  1) 내가 전에 넣은 같은 편명 — 내 기기·내 계정 데이터만 봄, 다른 사람과 공유 안 됨
 //  2) 이 기기에 저장된 지난 조회 결과
 //  3) 서버 /api/flight (AeroDataBox 실제 운항 정보 → 없으면 AI 추정)
 //  아티팩트 버전은 Claude(sample)로 추정
@@ -33,7 +34,7 @@ export async function lookupFlight({ airline, flightNo, date }, myFlights = []) 
     const seen = new Set();
     const legs = mine
       .filter((f) => (seen.has(f.from + f.to) ? false : seen.add(f.from + f.to)))
-      .map((f) => ({ from: f.from, to: f.to, dep: f.dep || '', arr: f.arr || '', arrOffset: +f.arrOffset || 0, date: '' }));
+      .map((f) => ({ from: f.from, to: f.to }));
     return { source: 'mine', legs };
   }
 
@@ -45,8 +46,8 @@ export async function lookupFlight({ airline, flightNo, date }, myFlights = []) 
   // 3) 서버 또는 AI
   let r;
   if (import.meta.env.VITE_TARGET === 'artifact') {
-    const j = await aiFill({ text: `${code}${no} ${date || ''} 편명만 있어. 정기 스케줄로 출발·도착 공항과 현지 시각을 채워줘. 경유편이면 구간을 모두.`, segments: [{ airline: code, flightNo: no, date }], today: date || '' });
-    r = { source: 'ai', legs: (j?.segments || []).filter((s) => s.from && s.to).map((s) => ({ from: s.from, to: s.to, dep: s.dep || '', arr: s.arr || '', arrOffset: +s.arrOffset || 0, date: s.date || '' })), note: j?.notes || '' };
+    const j = await aiFill({ text: `${code}${no} ${date || ''} 편명만 있어. 정기 스케줄로 출발·도착 공항만 채워줘(시각은 비워 둬). 경유편이면 구간을 모두.`, segments: [{ airline: code, flightNo: no, date }], today: date || '' });
+    r = { source: 'ai', legs: (j?.segments || []).filter((s) => s.from && s.to).map((s) => ({ from: s.from, to: s.to })), note: j?.notes || '' };
   } else {
     const q = new URLSearchParams({ airline: code, no, ...(date ? { date } : {}) });
     const res = await fetch(`/api/flight?${q}`);

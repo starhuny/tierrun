@@ -248,3 +248,14 @@ export function Avatar({ user, name, onClick }) {
     </button>
   );
 }
+
+// iOS에서도 칸 밖으로 넘치지 않는 날짜·시간 입력 (비어 있으면 안내 문구 표시)
+export function DateInput({ value, onChange, type = 'date', placeholder, invalid, ...rest }) {
+  const ph = placeholder ?? (type === 'time' ? '--:--' : '날짜 선택');
+  return (
+    <span className={`dtw ${value ? '' : 'blank'}`}>
+      <input className="input num" type={type} value={value || ''} onChange={(e) => onChange(e.target.value)} style={invalid ? { borderColor: 'var(--danger)' } : null} {...rest} />
+      {!value && <span className="dt-ph" aria-hidden="true">{ph}</span>}
+    </span>
+  );
+}

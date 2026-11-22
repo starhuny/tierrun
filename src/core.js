@@ -155,9 +155,9 @@ export function fmtDuration(min) {
 // 등급별로 설정 화면에서 받는 실적 칸
 export const BASE_KEYS = {
   SKYPASS: ['lifeKE', 'lifeST', 'lifeOT', 'lifePts'],
-  MC: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
-  MCS: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
-  MCP: ['lifeKE'],
+  MC: ['preKE', 'preOZ', 'perKE', 'perST', 'perOT', 'perPts'],
+  MCS: ['preKE', 'preOZ', 'perKE', 'perST', 'perOT', 'perPts'],
+  MCP: ['lifeKE', 'lifeOZ'],
   MM: [],
 };
 // 입력한 실적 숫자가 있을 때만 그 날짜 이전 항공편을 중복으로 보고 뺌
@@ -172,7 +172,7 @@ export function mergeRules(r) {
   for (const k of Object.keys(DEFAULT_RULES)) out[k] = { ...DEFAULT_RULES[k], ...(r?.[k] || {}) };
   return out;
 }
-const zero = () => ({ ke: 0, st: 0, ot: 0, pts: 0 });
+const zero = () => ({ ke: 0, st: 0, ot: 0, oz: 0, pts: 0 });
 const KEY = { KE: 'ke', ST: 'st', OT: 'ot' };
 
 export function tally(profile, flights, today) {
@@ -181,12 +181,13 @@ export function tally(profile, flights, today) {
   const tier = profile?.tier || 'SKYPASS';
   const life = { conf: zero(), plan: zero() };
   const period = { conf: zero(), plan: zero() };
-  period.conf = { ke: n('perKE'), st: n('perST'), ot: n('perOT'), pts: n('perPts') };
+  period.conf = { ke: n('perKE'), st: n('perST'), ot: n('perOT'), oz: 0, pts: n('perPts') };
   if ((tier === 'MC' || tier === 'MCS') && b.preKE != null) {
-    // 평생 = 등급 시작일 이전 누적 + 시작일 이후 실적
-    life.conf = { ke: n('preKE') + n('perKE'), st: n('perST'), ot: n('perOT'), pts: n('perPts') };
+    // 평생 = 등급 시작일 이전 누적(대한항공·스카이팀 + 아시아나 탑승) + 시작일 이후 실적
+    // ① 숫자는 평생 누적(프리미엄·밀리언 마일러)에만 쓰고, 유지·셀렉트 기간 실적에는 넣지 않음
+    life.conf = { ke: n('preKE') + n('perKE'), st: n('perST'), ot: n('perOT'), oz: n('preOZ'), pts: n('perPts') };
   } else {
-    life.conf = { ke: n('lifeKE'), st: n('lifeST'), ot: n('lifeOT'), pts: n('lifePts') };
+    life.conf = { ke: n('lifeKE'), st: n('lifeST'), ot: n('lifeOT'), oz: n('lifeOZ'), pts: n('lifePts') };
   }
   const baseDate = baselineDate(profile);
   const ps = profile?.periodStart || '0000-00-00';
@@ -291,13 +292,13 @@ export function computeGoals(profile, flights, today) {
   if (tier !== 'MCP' && tier !== 'MM') {
     goals.push(goal({
       id: 'premium', kind: 'lifetime', target: 'MCP', title: '모닝캄 프리미엄', scope: '평생 누적',
-      options: [{ label: `대한항공 + 스카이팀 평생 ${fmtNum(R.premium.miles)}마일`, parts: [part('평생 누적', L.ke + L.st, Lp.ke + Lp.st, R.premium.miles)] }],
+      options: [{ label: `대한항공 + 스카이팀 평생 ${fmtNum(R.premium.miles)}마일`, note: L.oz ? `아시아나 탑승 ${fmtNum(L.oz)}마일 포함` : undefined, parts: [part('평생 누적', L.ke + L.st + L.oz, Lp.ke + Lp.st, R.premium.miles)] }],
     }));
   }
   if (tier !== 'MM') {
     goals.push(goal({
       id: 'million', kind: 'lifetime', target: 'MM', title: '밀리언 마일러', scope: '평생 누적',
-      options: [{ label: `대한항공 + 스카이팀 평생 ${fmtNum(R.million.miles)}마일`, parts: [part('평생 누적', L.ke + L.st, Lp.ke + Lp.st, R.million.miles)] }],
+      options: [{ label: `대한항공 + 스카이팀 평생 ${fmtNum(R.million.miles)}마일`, note: L.oz ? `아시아나 탑승 ${fmtNum(L.oz)}마일 포함` : undefined, parts: [part('평생 누적', L.ke + L.st + L.oz, Lp.ke + Lp.st, R.million.miles)] }],
     }));
   }
   const headlineId = { SKYPASS: 'mcQualify', MC: 'select', MCS: 'premium', MCP: 'million', MM: null }[tier];
