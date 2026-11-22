@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AIRLINES, AIRLINE, CREDIT, KE_CABIN } from './skypass.js';
+import { AIRLINES, AIRLINE, CREDIT, CABINS, CABIN, cabinFromClass } from './skypass.js';
 import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
@@ -7,7 +7,7 @@ import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark } 
 
 const blank = (o = {}) => ({
   key: uid(), id: null, airline: 'KE', flightNo: '', date: '', dep: '', arr: '', arrOffset: 0, from: '', to: '', cls: '',
-  rate: 100, baseMiles: null, baseSource: null, baseTouched: false, milesOverride: null, credit: 'KE', creditTouched: false,
+  cabin: 'Y', rate: 100, baseMiles: null, baseSource: null, baseTouched: false, milesOverride: null, credit: 'KE', creditTouched: false,
   price: null, note: '', showBase: false, showOverride: false, ...o,
 });
 
@@ -29,12 +29,13 @@ function auto(s, changed) {
   if ((changed.includes('cls') || changed.includes('from') || changed.includes('to') || changed.includes('airline')) && code === 'KE' && n.cls) {
     const r = keClassRate(n.cls, n.from, n.to);
     if (r != null) n.rate = r;
+    if (changed.includes('cls')) n.cabin = cabinFromClass(n.cls) || n.cabin;
   }
   return n;
 }
 
 function fromFlight(f) {
-  return blank({ ...f, key: f.id, showBase: f.baseSource === 'manual', showOverride: f.milesOverride != null, baseTouched: f.baseSource === 'manual' || f.baseSource === 'ai', creditTouched: f.credit !== defaultCredit(f.airline) });
+  return blank({ ...f, cabin: f.cabin || (f.airline === 'KE' && f.cls ? cabinFromClass(f.cls) : 'Y'), key: f.id, showBase: f.baseSource === 'manual', showOverride: f.milesOverride != null, baseTouched: f.baseSource === 'manual' || f.baseSource === 'ai', creditTouched: f.credit !== defaultCredit(f.airline) });
 }
 
 export default function FlightForm({ initial, today, aiOk, onSave, onCancel, onDeleteTrip }) {
@@ -77,7 +78,7 @@ export default function FlightForm({ initial, today, aiOk, onSave, onCancel, onD
   const flightsOut = useMemo(
     () => segs.map((s) => ({
       id: s.id || s.key, airline: (s.airline || '').toUpperCase(), flightNo: s.flightNo.trim(), date: s.date, dep: s.dep, arr: s.arr, arrOffset: +s.arrOffset || 0,
-      from: s.from, to: s.to, cls: (s.cls || '').toUpperCase(), rate: s.rate == null ? 100 : +s.rate, baseMiles: s.baseMiles == null ? 0 : +s.baseMiles,
+      from: s.from, to: s.to, cls: (s.cls || '').toUpperCase(), cabin: s.cabin || 'Y', rate: s.rate == null ? 100 : +s.rate, baseMiles: s.baseMiles == null ? 0 : +s.baseMiles,
       baseSource: s.baseSource || 'manual', milesOverride: s.showOverride && s.milesOverride != null ? +s.milesOverride : null, credit: s.credit,
       price: priceMode === 'each' ? s.price : null, note: s.note || '',
     })),
@@ -120,6 +121,7 @@ export default function FlightForm({ initial, today, aiOk, onSave, onCancel, onD
         const b = baseMilesFor(code, s.from, s.to);
         if (b.miles != null) s = { ...s, baseMiles: b.miles, baseSource: b.source, baseTouched: false };
         else if (x.distanceMiles) s = { ...s, baseMiles: Math.round(x.distanceMiles), baseSource: 'ai', baseTouched: true };
+        s.cabin = (code === 'KE' && s.cls ? cabinFromClass(s.cls) : null) || (['Y', 'W', 'C', 'F'].includes(x.cabin) ? x.cabin : prev?.cabin || 'Y');
         const kr = code === 'KE' && s.cls ? keClassRate(s.cls, s.from, s.to) : null;
         s.rate = kr ?? (x.earnRate != null ? +x.earnRate : prev?.rate ?? 100);
         return s;
@@ -223,7 +225,7 @@ function SegCard({ s, i, n, err, showPrice, onChange, onRemove }) {
   const [custom, setCustom] = useState(!known && !!s.airline);
   const e = earnedMiles({ ...s, milesOverride: s.showOverride ? s.milesOverride : null });
   const p = flightPoints({ ...s });
-  const cabin = s.airline === 'KE' && s.cls ? KE_CABIN[s.cls.toUpperCase()] || '일반석' : null;
+  const cabin = s.cls && s.airline === 'KE' ? CABIN[cabinFromClass(s.cls)]?.name : null;
   const keRate = s.airline === 'KE' && s.cls ? keClassRate(s.cls, s.from, s.to) : null;
   const gc = s.from && s.to ? gcMiles(s.from, s.to) : null;
   return (
@@ -268,6 +270,10 @@ function SegCard({ s, i, n, err, showPrice, onChange, onRemove }) {
         </label>
       </div>
       {err.date && <div className="err-t">날짜를 넣어 주세요.</div>}
+      <div className="field">
+        <span>좌석 등급</span>
+        <Seg small light options={CABINS.map((c) => [c.id, c.name])} value={s.cabin || 'Y'} onChange={(v) => onChange(s.cls ? { cabin: v } : { cabin: v, rate: CABIN[v].rate })} />
+      </div>
       <div className="row3" style={{ gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
         <label className="field"><span>출발 시각</span><input className="input num" type="time" value={s.dep} onChange={(ev) => onChange({ dep: ev.target.value })} /></label>
         <label className="field"><span>도착 시각</span><input className="input num" type="time" value={s.arr} onChange={(ev) => onChange({ arr: ev.target.value })} /></label>

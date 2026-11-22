@@ -59,10 +59,10 @@ npm run build && npx cap add ios && npx cap add android
 
 | 내용 | 파일 |
 |---|---|
-| 구간별 적립 마일리지 표, 예약 등급별 적립률, 항공사, 등급 기준 기본값 | `src/data/skypass.js` |
-| 공항 목록(한글명·좌표) | `src/data/airports.js` |
-| 등급 계산 로직 | `src/lib/core.js` (`computeGoals`) |
-| AI 프롬프트 | `src/lib/ai.js` |
+| 구간별 적립 마일리지 표, 예약 등급별 적립률, 항공사, 등급 기준 기본값 | `src/skypass.js` |
+| 공항 목록(한글명·좌표) | `src/airports.js` |
+| 등급 계산 로직 | `src/core.js` (`computeGoals`) |
+| AI 프롬프트 | `src/ai.js` |
 
 등급 기준은 앱의 **설정 › 등급 기준 직접 수정**에서도 바꿀 수 있습니다.
 

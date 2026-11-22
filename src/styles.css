@@ -343,3 +343,7 @@ details.adv summary { font-weight: 700; cursor: pointer; font-size: 14px; }
 .app.mob .toast { top: calc(14px + env(safe-area-inset-top)); bottom: auto; }
 .miles-out .link { white-space: nowrap; }
 .tierpick button, .rung { word-break: keep-all; }
+.badge.cabin-Y { background: var(--bg-2); color: var(--ink-2); }
+.badge.cabin-W { background: var(--sky-soft); color: var(--sky-ink); }
+.badge.cabin-C { background: var(--navy-btn); color: var(--navy-btn-ink); }
+.badge.cabin-F { background: light-dark(#f3e6cf, #4a3a1c); color: light-dark(#7a5517, #f3d59a); }

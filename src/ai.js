@@ -31,6 +31,7 @@ const SCHEMA = `{
     "from": "ICN", "to": "SEA",         // IATA 공항 코드
     "dep": "HH:MM" | null, "arr": "HH:MM" | null, "arrOffset": 0,
     "bookingClass": "Q" | null,
+    "cabin": "Y" | "W" | "C" | "F" | null,   // 일반석/프리미엄/비즈니스/일등석
     "earnRate": number | null,          // 스카이패스 적립률(%)
     "distanceMiles": number | null,     // 스카이패스 구간 마일(편도, 100% 기준) 추정
     "credit": "KE" | "ST" | "OT" | "NONE",

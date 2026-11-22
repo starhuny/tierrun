@@ -47,7 +47,7 @@ export function sampleState(today) {
     periodStart: start,
     periodEnd: end,
     baseDate: addDays(today, -60),
-    base: { perKE: 18240, perST: 0, perOT: 0, perPts: 10, lifeKE: 61200, lifeST: 0, lifeOT: 0, lifePts: 0 },
+    base: { preKE: 42960, perKE: 18240, perST: 0, perOT: 0, perPts: 10, lifeKE: null, lifeST: null, lifeOT: null, lifePts: null },
     sample: true,
   };
   return { profile, flights, trips };

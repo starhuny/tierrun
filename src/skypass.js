@@ -89,6 +89,23 @@ export const KE_CABIN = {
   V: '프리미엄', W: '프리미엄', P: '프리미엄', N: '프리미엄',
 };
 
+// 좌석 등급 (표시용) — 예약 등급을 모를 때 쓰는 대표 적립률
+export const CABINS = [
+  { id: 'Y', name: '일반석', rate: 100 },
+  { id: 'W', name: '프리미엄', rate: 100 },
+  { id: 'C', name: '비즈니스', rate: 125 },
+  { id: 'F', name: '일등석', rate: 200 },
+];
+export const CABIN = Object.fromEntries(CABINS.map((c) => [c.id, c]));
+export function cabinFromClass(cls) {
+  const c = String(cls || '').toUpperCase();
+  if (!c) return null;
+  if ('FA'.includes(c)) return 'F';
+  if ('JCDIRZO'.includes(c)) return 'C';
+  if ('VWPN'.includes(c)) return 'W';
+  return 'Y';
+}
+
 // 슬라이더 고정 눈금 (그 외 값은 직접 입력)
 export const RATE_STOPS = [10, 20, 25, 30, 50, 70, 80, 100, 110, 125, 130];
 

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { findAirport } from './airports.js';
-import { AIRLINE, CREDIT, TIER, TIERS, KE_CABIN } from './skypass.js';
+import { AIRLINE, CREDIT, TIER, TIERS, CABIN } from './skypass.js';
 import {
   fmtDate, fmtDot, fmtNum, fmtWon, fmtWonShort, daysBetween, earnedMiles, flightPoints, flightCost, layover, fmtDuration,
-  sortFlights, contributionOf, SOURCE_LABEL, isDomesticKR, tripFlights,
+  sortFlights, contributionOf, SOURCE_LABEL, isDomesticKR, tripFlights, cabinOf,
 } from './core.js';
 import { Icon, AirlineMark, Bar, Ring, Avatar } from './ui.jsx';
 import Globe from './Globe.jsx';
@@ -16,6 +16,11 @@ function DDay({ f, today }) {
   if (d < 0) return <div className="dday"><span className="done"><Icon name="check" size={16} stroke={2.6} /></span><small>탑승 완료</small></div>;
   if (d === 0) return <div className="dday today"><b>오늘</b></div>;
   return <div className="dday"><b className="num">{d}</b><small>일 후</small></div>;
+}
+
+export function CabinBadge({ f }) {
+  const c = cabinOf(f);
+  return <span className={`badge cabin-${c}`}>{CABIN[c]?.name || '일반석'}</span>;
 }
 
 export function FlightRow({ f, ctx, selected, onClick }) {
@@ -42,8 +47,9 @@ export function FlightRow({ f, ctx, selected, onClick }) {
           {f.credit === 'NONE' ? <span className="badge gray">스카이패스 미반영</span> : <span className="chip"><b>+{fmtNum(e)}</b>마일</span>}
           {p > 0 && <span className="chip"><b>+{p}</b>P</span>}
           {c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
+          <CabinBadge f={f} />
           {(f.credit === 'ST' || f.credit === 'OT') && <span className="badge gray">{CREDIT[f.credit].short}</span>}
-          {excluded && f.credit !== 'NONE' && <span className="badge gray">기준 실적에 포함</span>}
+          {excluded && f.credit !== 'NONE' && <span className="badge gray">입력한 실적에 포함</span>}
         </div>
       </div>
     </button>
@@ -157,7 +163,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
   const contrib = contributionOf(f, profile);
   const d = daysBetween(today, f.date);
   const km = f.baseMiles ? Math.round(f.baseMiles * 1.609344) : null;
-  const cabin = f.airline === 'KE' && f.cls ? KE_CABIN[f.cls.toUpperCase()] || '일반석' : null;
+  const cabin = CABIN[cabinOf(f)]?.name || '일반석';
   const [confirm, setConfirm] = useState(false);
   return (
     <div className="fade-in">
@@ -171,6 +177,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
       </div>
       <div style={{ padding: '4px 20px 0', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {d < 0 ? <span className="badge good"><Icon name="check" size={13} stroke={3} />탑승 완료 · 확정 실적</span> : d === 0 ? <span className="badge">오늘 출발</span> : <span className="badge">D-{d} · 예정 실적</span>}
+        <CabinBadge f={f} />
         <span className="badge gray">{AIRLINE[f.airline]?.name || f.airline}</span>
         {isDomesticKR(f.from, f.to) ? <span className="badge gray">국내선</span> : <span className="badge gray">국제선</span>}
       </div>
@@ -200,7 +207,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
             <div className="calc num">
               <span className="muted">구간 마일 <span className={`src ${f.baseSource || ''}`}>{SOURCE_LABEL[f.baseSource] || '직접 입력'}</span></span>
               <b>{fmtNum(f.baseMiles)}</b>
-              <span className="muted">적립률 {f.cls ? `· ${f.cls.toUpperCase()} 클래스` : ''}{cabin ? ` (${cabin})` : ''}</span>
+              <span className="muted">적립률 · {cabin}{f.cls ? ` ${f.cls.toUpperCase()} 클래스` : ''}</span>
               <b>× {f.rate ?? 100}%</b>
               {f.milesOverride != null && <><span className="muted">직접 수정한 적립 마일</span><b>적용</b></>}
               <div className="eq">
@@ -226,7 +233,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
           </div>
         )}
         {contrib.excluded && f.credit !== 'NONE' && (
-          <div className="card"><p className="muted" style={{ margin: 0, fontSize: 14 }}>기준일({fmtDot(profile.baseDate)}) 이전 항공편이라 등급 계산에서는 기준 실적에 이미 포함된 것으로 봐요.</p></div>
+          <div className="card"><p className="muted" style={{ margin: 0, fontSize: 14 }}>설정에 입력한 실적({fmtDot(profile.baseDate)}까지)에 이미 들어 있는 항공편이라 중복 계산하지 않아요. 비용·단가 통계에는 그대로 들어가요.</p></div>
         )}
 
         <div className="card">
@@ -351,7 +358,7 @@ export function TierView({ ctx, goals, stats, head, onSettings }) {
           <div className="ko">{tier.name}</div>
         </div>
         <div className="foot num">
-          <span>{user?.name || profile?.name || '회원'}</span>
+          <span>{profile?.name || user?.name || '회원'}</span>
           <span>{profile?.periodEnd && (tier.id === 'MC' || tier.id === 'MCS') ? `${fmtDot(profile.periodEnd)}까지${dleft != null && dleft >= 0 ? ` · D-${dleft}` : ''}` : tier.id === 'MCP' || tier.id === 'MM' ? '평생 등급' : ''}</span>
         </div>
       </div>
@@ -405,8 +412,10 @@ export function TierView({ ctx, goals, stats, head, onSettings }) {
       <div className="ladder-cap num">{caps.map((c) => <span key={c}>{c}</span>)}</div>
 
       <p className="basis">
-        기준일 {profile?.baseDate ? fmtDot(profile.baseDate) : '–'}까지는 대한항공 홈페이지 실적을, 그 이후는 여기 등록한 항공편을 더해 계산해요. 탑승일이 지난 항공편은 확정, 남은 항공편은 예정으로 봐요. 실제 적립·등급은 대한항공 기준이 우선이에요.{' '}
-        <button className="link" onClick={onSettings}>기준 실적 수정</button>
+        {profile?.tier === 'MC' || profile?.tier === 'MCS' ? '등급 시작일 이후 실적은 설정에 입력한 숫자와 여기 추가한 항공편을 더해 계산해요. ' : '설정에 입력한 실적과 여기 추가한 항공편을 더해 계산해요. '}
+        {profile?.baseDate ? `입력한 숫자는 ${fmtDot(profile.baseDate)}까지의 실적으로 보고, 그 전 날짜의 항공편은 중복 계산하지 않아요. ` : ''}
+        탑승일이 지난 항공편은 확정, 남은 항공편은 예정으로 봐요. 실제 적립·등급은 대한항공 기준이 우선이에요.{' '}
+        <button className="link" onClick={onSettings}>실적 수정</button>
       </p>
     </>
   );

@@ -1,6 +1,6 @@
 import { geoDistance } from 'd3-geo';
 import { findAirport } from './airports.js';
-import { KE_ROUTE_MILES, KE_CLASS_RATES, AIRLINE, DEFAULT_RULES } from './skypass.js';
+import { KE_ROUTE_MILES, KE_CLASS_RATES, AIRLINE, DEFAULT_RULES, cabinFromClass } from './skypass.js';
 
 /* ───────── 날짜·숫자 ───────── */
 export const pad = (n) => String(n).padStart(2, '0');
@@ -64,6 +64,8 @@ export function keClassRate(cls, from, to) {
   const r = t[String(cls).toUpperCase()];
   return r == null ? null : r;
 }
+
+export const cabinOf = (f) => f.cabin || (f.airline === 'KE' && f.cls ? cabinFromClass(f.cls) : null) || 'Y';
 
 export const defaultCredit = (airline) => AIRLINE[String(airline || '').toUpperCase()]?.credit || 'NONE';
 
@@ -160,10 +162,17 @@ const KEY = { KE: 'ke', ST: 'st', OT: 'ot' };
 
 export function tally(profile, flights, today) {
   const b = profile?.base || {};
+  const n = (k) => +b[k] || 0;
+  const tier = profile?.tier || 'SKYPASS';
   const life = { conf: zero(), plan: zero() };
   const period = { conf: zero(), plan: zero() };
-  life.conf = { ke: +b.lifeKE || 0, st: +b.lifeST || 0, ot: +b.lifeOT || 0, pts: +b.lifePts || 0 };
-  period.conf = { ke: +b.perKE || 0, st: +b.perST || 0, ot: +b.perOT || 0, pts: +b.perPts || 0 };
+  period.conf = { ke: n('perKE'), st: n('perST'), ot: n('perOT'), pts: n('perPts') };
+  if ((tier === 'MC' || tier === 'MCS') && b.preKE != null) {
+    // 평생 = 등급 시작일 이전 누적 + 시작일 이후 실적
+    life.conf = { ke: n('preKE') + n('perKE'), st: n('perST'), ot: n('perOT'), pts: n('perPts') };
+  } else {
+    life.conf = { ke: n('lifeKE'), st: n('lifeST'), ot: n('lifeOT'), pts: n('lifePts') };
+  }
   const baseDate = profile?.baseDate || '';
   const ps = profile?.periodStart || '0000-00-00';
   const pe = profile?.periodEnd || '9999-12-31';
@@ -224,9 +233,9 @@ export function computeGoals(profile, flights, today) {
     goals.push(goal({
       id: 'mcQualify', kind: 'qualify', target: 'MC', title: '모닝캄 승급', scope: '가입 후 누적 · 기간 제한 없음',
       options: [
-        { label: `대한항공 + 제휴 항공사 ${fmtNum(R.mcQualify.total)}마일`, note: `대한항공 탑승 ${fmtNum(R.mcQualify.keMin)}마일 이상 포함`, parts: [
-          part('대한항공 + 제휴 항공사', L.ke + L.st + L.ot, Lp.ke + Lp.st + Lp.ot, R.mcQualify.total),
-          part('그중 대한항공 탑승', L.ke, Lp.ke, R.mcQualify.keMin),
+        { label: `대한항공 + 제휴 항공사 ${fmtNum(R.mcQualify.total)}마일`, note: `이 중 ${fmtNum(R.mcQualify.keMin)}마일 이상은 대한항공 편 탑승이어야 해요 (스카이팀 제외)`, parts: [
+          part('전체 (대한항공 + 스카이팀·제휴)', L.ke + L.st + L.ot, Lp.ke + Lp.st + Lp.ot, R.mcQualify.total),
+          part('대한항공 편 탑승만', L.ke, Lp.ke, R.mcQualify.keMin),
         ] },
         { label: `대한항공 탑승 횟수 ${fmtNum(R.mcQualify.points)}포인트`, note: '국내선 1P · 국제선 2P', parts: [part('탑승 횟수 포인트', L.pts, Lp.pts, R.mcQualify.points, 'pt')] },
       ],
@@ -243,12 +252,12 @@ export function computeGoals(profile, flights, today) {
     goals.push(goal({
       id: 'mcRetain', kind: 'retain', target: 'MC', title: '모닝캄 유지', scope: '자격 유효기간 2년 내', deadline,
       options: [
-        { label: `${fmtNum(R.mcRetain.total)}마일 적립`, note: `대한항공 탑승 ${fmtNum(R.mcRetain.keMin)}마일 이상 포함`, parts: [
-          part('대한항공 + 제휴 항공사', P.ke + P.st + P.ot, Pp.ke + Pp.st + Pp.ot, R.mcRetain.total),
-          part('그중 대한항공 탑승', P.ke, Pp.ke, R.mcRetain.keMin),
+        { label: `${fmtNum(R.mcRetain.total)}마일 적립`, note: `이 중 ${fmtNum(R.mcRetain.keMin)}마일 이상은 대한항공 편 탑승이어야 해요 (스카이팀 제외)`, parts: [
+          part('전체 (대한항공 + 스카이팀·제휴)', P.ke + P.st + P.ot, Pp.ke + Pp.st + Pp.ot, R.mcRetain.total),
+          part('대한항공 편 탑승만', P.ke, Pp.ke, R.mcRetain.keMin),
         ] },
         { label: `${fmtNum(R.mcRetain.total2)}마일 + 탑승 횟수 ${R.mcRetain.points2}포인트`, note: '포인트를 채우면 잔여 마일은 제휴사로', parts: [
-          part('대한항공 + 제휴 항공사', P.ke + P.st + P.ot, Pp.ke + Pp.st + Pp.ot, R.mcRetain.total2),
+          part('전체 (대한항공 + 스카이팀·제휴)', P.ke + P.st + P.ot, Pp.ke + Pp.st + Pp.ot, R.mcRetain.total2),
           part('탑승 횟수 포인트', P.pts, Pp.pts, R.mcRetain.points2, 'pt'),
         ] },
         { label: `탑승 횟수 ${R.mcRetain.points3}포인트`, parts: [part('탑승 횟수 포인트', P.pts, Pp.pts, R.mcRetain.points3, 'pt')] },

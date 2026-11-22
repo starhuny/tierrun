@@ -11,9 +11,18 @@ const twoYearsEnd = (start) => {
 };
 
 export const emptyProfile = (name = '') => ({
-  name, tier: 'MC', periodStart: '', periodEnd: '', baseDate: todayISO(),
-  base: { perKE: null, perST: null, perOT: null, perPts: null, lifeKE: null, lifeST: null, lifeOT: null, lifePts: null }, rules: {},
+  name, tier: 'MC', periodStart: '', periodEnd: '', baseDate: '',
+  base: { preKE: null, perKE: null, perST: null, perOT: null, perPts: null, lifeKE: null, lifeST: null, lifeOT: null, lifePts: null }, rules: {},
 });
+
+// 등급별로 화면에 쓰는 실적 칸
+const BASE_KEYS = {
+  SKYPASS: ['lifeKE', 'lifeST', 'lifeOT', 'lifePts'],
+  MC: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
+  MCS: ['preKE', 'perKE', 'perST', 'perOT', 'perPts'],
+  MCP: ['lifeKE'],
+  MM: [],
+};
 
 export default function Settings({ profile, user, mode, note, isSetup, hasFlights, onSave, onClose, onSample, onExport, onImport, onReset, onSignOut }) {
   const [p, setP] = useState(() => ({ ...emptyProfile(user?.name || ''), ...(profile || {}), base: { ...emptyProfile().base, ...(profile?.base || {}) } }));
@@ -21,6 +30,7 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
   const [imp, setImp] = useState('');
   const [msg, setMsg] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [editEnd, setEditEnd] = useState(false);
   const set = (patch) => setP((x) => ({ ...x, ...patch }));
   const setB = (k, v) => setP((x) => ({ ...x, base: { ...x.base, [k]: v } }));
   const setR = (g, k, v) => setRules((r) => ({ ...r, [g]: { ...r[g], [k]: v ?? 0 } }));
@@ -31,7 +41,16 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
     for (const g of Object.keys(DEFAULT_RULES)) {
       for (const k of Object.keys(DEFAULT_RULES[g])) if (rules[g][k] !== DEFAULT_RULES[g][k]) (diff[g] ||= {})[k] = rules[g][k];
     }
-    onSave({ ...p, rules: diff, sample: false });
+    // 숫자를 넣었으면 오늘까지의 실적으로 보고, 오늘 이전 항공편은 중복 계산하지 않음
+    const keys = BASE_KEYS[p.tier] || [];
+    const base = { ...p.base };
+    if ((p.tier === 'MC' || p.tier === 'MCS') && base.preKE == null) base.preKE = 0;
+    const pick = (b) => JSON.stringify(keys.map((k) => +b?.[k] || 0));
+    const hasNums = keys.some((k) => +base[k] > 0);
+    const changed = pick(base) !== pick(profile?.base) || p.tier !== profile?.tier;
+    const baseDate = !hasNums ? '' : changed || !profile?.baseDate ? todayISO() : profile.baseDate;
+    const periodEnd = p.periodEnd || twoYearsEnd(p.periodStart);
+    onSave({ ...p, base, baseDate, periodEnd, rules: diff, sample: false });
   };
 
   const copy = async () => {
@@ -58,7 +77,7 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
       <div className="form">
         {isSetup && (
           <div className="card" style={{ background: 'var(--sky-soft)', border: 0 }}>
-            <p style={{ margin: 0, fontSize: 14 }}>대한항공 홈페이지 <b>마이페이지 › 마일리지 현황 › 등급 현황</b>의 숫자를 그대로 옮겨 적으면, 그 뒤로 추가하는 항공편이 더해져 진행률이 계산돼요.</p>
+            <p style={{ margin: 0, fontSize: 14 }}>현재 등급과 등급 시작일만 넣으면 시작할 수 있어요. 실적 숫자는 대한항공 홈페이지 <b>마이페이지 › 마일리지 현황</b>에서 옮겨 적거나, <b>0으로 비워 두고 지난 항공편을 앱에서 하나씩 추가</b>해도 돼요.</p>
           </div>
         )}
         <label className="field"><span>이름</span><input className="input" value={p.name} placeholder="표시할 이름" onChange={(e) => set({ name: e.target.value })} /></label>
@@ -74,34 +93,44 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
 
         {periodic && (
           <div className="segcard">
-            <div className="sh">자격 유효기간 · 심사 기간</div>
-            <div className="row2">
-              <label className="field"><span>시작일</span><input className="input num" type="date" value={p.periodStart} onChange={(e) => set({ periodStart: e.target.value, periodEnd: p.periodEnd || twoYearsEnd(e.target.value) })} /></label>
-              <label className="field"><span>종료일</span><input className="input num" type="date" value={p.periodEnd} onChange={(e) => set({ periodEnd: e.target.value })} /></label>
-            </div>
-            <p className="help" style={{ margin: 0 }}>{p.tier === 'MC' ? '모닝캄 셀렉트 승급과 모닝캄 유지를 이 기간 안의 실적으로 계산해요. 등급 현황의 ‘심사 기간’ 날짜와 같아요.' : '셀렉트 유지를 이 기간 안의 실적으로 계산해요.'}</p>
+            <div className="sh">등급 시작일</div>
+            <label className="field">
+              <span>{p.tier === 'MC' ? '모닝캄' : '모닝캄 셀렉트'}이 된 날</span>
+              <input className="input num" type="date" value={p.periodStart} onChange={(e) => set({ periodStart: e.target.value, periodEnd: editEnd ? p.periodEnd : twoYearsEnd(e.target.value) })} />
+            </label>
+            {editEnd ? (
+              <label className="field"><span>자격 종료일</span><input className="input num" type="date" value={p.periodEnd} onChange={(e) => set({ periodEnd: e.target.value })} /></label>
+            ) : (
+              <p className="help" style={{ margin: 0 }}>
+                {p.periodStart ? <>자격은 <b>{(p.periodEnd || twoYearsEnd(p.periodStart)).replaceAll('-', '.')}</b>까지예요 (시작일로부터 2년 뒤 달 말일). </> : '시작일을 넣으면 종료일은 2년 뒤 달 말일로 자동 계산돼요. '}
+                <button type="button" className="link" onClick={() => setEditEnd(true)}>종료일 직접 수정</button>
+              </p>
+            )}
+            <p className="help" style={{ margin: 0 }}>{p.tier === 'MC' ? '이 기간 안의 실적으로 모닝캄 유지와 모닝캄 셀렉트 승급을 계산해요.' : '이 기간 안의 실적으로 셀렉트 유지를 계산해요.'}</p>
           </div>
         )}
 
         <div className="segcard">
-          <div className="sh">기준 실적</div>
-          <label className="field"><span>기준일 — 이 날짜까지의 탑승은 아래 숫자에 이미 들어 있어요</span><input className="input num" type="date" value={p.baseDate} onChange={(e) => set({ baseDate: e.target.value })} /></label>
+          <div className="sh">지금까지 탄 실적</div>
+          <p className="help" style={{ margin: 0 }}>모르면 <b>0으로 비워 두고</b>, 지난 항공편을 앱에서 ‘항공편 추가’로 넣어도 똑같이 계산돼요. 숫자를 넣으면 오늘 이전 날짜의 항공편은 그 숫자에 들어 있는 걸로 보고 중복 계산하지 않아요.</p>
           {p.tier === 'SKYPASS' && (
             <>
-              <p className="help" style={{ margin: 0 }}>가입 후 누적 실적 (모닝캄 승급은 기간 제한이 없어요)</p>
-              <div className="row2">{num("lifeKE", "대한항공 탑승 마일")}{num("lifePts", "탑승 횟수 포인트", "P")}</div>
-              <div className="row2">{num("lifeST", "스카이팀 탑승 마일")}{num("lifeOT", "기타 제휴 항공사 마일")}</div>
+              <div className="lab">스카이패스 가입 후 지금까지</div>
+              <div className="row2">{num('lifeKE', '대한항공 탑승 마일')}{num('lifePts', '탑승 횟수 포인트', 'P')}</div>
+              <div className="row2">{num('lifeST', '스카이팀 탑승 마일')}{num('lifeOT', '기타 제휴 항공사 마일')}</div>
             </>
           )}
           {periodic && (
             <>
-              <p className="help" style={{ margin: 0 }}>심사 기간 안의 실적</p>
-              <div className="row2">{num("perKE", "대한항공 탑승 마일")}{num("perPts", "탑승 횟수 포인트", "P")}</div>
-              <div className="row2">{num("perST", "스카이팀 탑승 마일")}{num("perOT", "기타 제휴 항공사 마일")}</div>
-              <p className="help" style={{ margin: 0 }}>홈페이지에 ‘대한항공 + 스카이팀’ 합계만 보이면 대한항공 칸에 합계를 넣어도 돼요. 다만 모닝캄 유지의 ‘대한항공 2만 마일’ 조건은 대한항공 칸으로만 계산돼요.</p>
+              <div className="lab">① 등급 시작일 이전에 탄 것 (평생 누적용)</div>
+              {num('preKE', '대한항공 + 스카이팀 탑승 마일')}
+              <div className="lab" style={{ marginTop: 4 }}>② 등급 시작일 이후에 탄 것</div>
+              <div className="row2">{num('perKE', '대한항공 탑승 마일')}{num('perPts', '탑승 횟수 포인트', 'P')}</div>
+              <div className="row2">{num('perST', '스카이팀 탑승 마일')}{num('perOT', '기타 제휴 항공사 마일')}</div>
+              <p className="help" style={{ margin: 0 }}>①은 모닝캄 프리미엄(평생 50만)·밀리언 마일러 진행률에, ②는 모닝캄 유지·셀렉트 승급에 쓰여요. 모닝캄 유지의 ‘대한항공 편 2만 마일’ 조건은 대한항공 칸만 세요.</p>
             </>
           )}
-          {p.tier !== 'SKYPASS' && p.tier !== 'MM' && num('lifeKE', '평생 누적 탑승 마일 (대한항공 + 스카이팀)')}
+          {p.tier === 'MCP' && num('lifeKE', '평생 누적 탑승 마일 (대한항공 + 스카이팀)')}
           {p.tier === 'MM' && <p className="help" style={{ margin: 0 }}>밀리언 마일러는 평생 등급이라 추가 목표가 없어요. 항공편 기록과 단가 계산은 그대로 쓸 수 있어요.</p>}
         </div>
 
