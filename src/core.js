@@ -181,7 +181,11 @@ export function tally(profile, flights, today) {
   const tier = profile?.tier || 'SKYPASS';
   const life = { conf: zero(), plan: zero() };
   const period = { conf: zero(), plan: zero() };
-  period.conf = { ke: n('perKE'), st: n('perST'), ot: n('perOT'), oz: 0, pts: n('perPts') };
+  // 입력한 숫자는 baseDate(입력한 날) 기준 실적이라, 등급 시작일이 그보다 뒤면 기간 실적이 될 수 없음
+  // (예: 11.22에 입력, 셀렉트 시작 12.17 → 입력 숫자는 평생 누적에만)
+  const periodic = tier === 'MC' || tier === 'MCS';
+  const startsLater = periodic && profile?.periodStart && profile.periodStart > (profile?.baseDate || today);
+  period.conf = startsLater ? zero() : { ke: n('perKE'), st: n('perST'), ot: n('perOT'), oz: 0, pts: n('perPts') };
   if ((tier === 'MC' || tier === 'MCS') && b.preKE != null) {
     // 평생 = 등급 시작일 이전 누적(대한항공·스카이팀 + 아시아나 탑승) + 시작일 이후 실적
     // ① 숫자는 평생 누적(프리미엄·밀리언 마일러)에만 쓰고, 유지·셀렉트 기간 실적에는 넣지 않음

@@ -28,6 +28,8 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
   const setB = (k, v) => setP((x) => ({ ...x, base: { ...x.base, [k]: v } }));
   const setR = (g, k, v) => setRules((r) => ({ ...r, [g]: { ...r[g], [k]: v ?? 0 } }));
   const periodic = p.tier === 'MC' || p.tier === 'MCS';
+  // 등급 시작일이 아직 안 왔으면 지금까지 탄 건 전부 시작일 이전 실적(①)
+  const startsLater = periodic && !!p.periodStart && p.periodStart > todayISO();
 
   const save = () => {
     const diff = {};
@@ -38,6 +40,11 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
     const keys = BASE_KEYS[p.tier] || [];
     const base = { ...p.base };
     if ((p.tier === 'MC' || p.tier === 'MCS') && base.preKE == null) base.preKE = 0;
+    if (startsLater) {
+      // 시작일 전에 입력한 ② 숫자는 ①로 옮김 (대한항공·스카이팀만 평생 누적에 해당)
+      base.preKE = (+base.preKE || 0) + (+base.perKE || 0) + (+base.perST || 0);
+      base.perKE = base.perST = base.perOT = base.perPts = 0;
+    }
     const pick = (b) => JSON.stringify(keys.map((k) => +b?.[k] || 0));
     const hasNums = keys.some((k) => +base[k] > 0);
     const changed = pick(base) !== pick(profile?.base) || p.tier !== profile?.tier;
@@ -61,7 +68,7 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
   const zeroNote =
     p.tier === 'SKYPASS' && z(BASE_KEYS.SKYPASS)
       ? '지금은 실적이 0이에요. 앱에 추가한 항공편만 계산되니, 스카이패스 가입 후 탄 대한항공·제휴 항공편을 처음부터 빠짐없이 추가해 주세요.'
-      : periodic && z(['perKE', 'perST', 'perOT', 'perPts'])
+      : periodic && !startsLater && z(['perKE', 'perST', 'perOT', 'perPts'])
         ? `지금은 ②가 0이에요. 앱에 추가한 항공편만 계산되니, 등급 시작일${startTxt} 이후 탄 항공편을 처음부터 빠짐없이 추가해 주세요.${z(['preKE', 'preOZ']) ? ' ①도 0이면 프리미엄·밀리언 마일러 진행률은 시작일 이전 항공편까지 추가해야 맞아요.' : ''}`
         : periodic && z(['preKE', 'preOZ'])
           ? '①이 0이에요. 모닝캄 프리미엄·밀리언 마일러 진행률을 맞추려면 등급 시작일 이전 항공편도 추가하거나 ①에 누적 마일을 넣어 주세요.'
@@ -129,12 +136,17 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
           )}
           {periodic && (
             <>
-              <div className="lab">① 등급 시작일 이전에 탄 것 (평생 누적용)</div>
+              {startsLater && <div className="notice">등급 시작일({p.periodStart.replaceAll('-', '.')})이 아직 오지 않았어요. 지금까지 탄 마일은 모두 시작일 이전 실적이라 <b>①에만</b> 넣어 주세요. 모닝캄 프리미엄·밀리언 마일러에만 반영되고, {p.tier === 'MCS' ? '셀렉트' : '모닝캄'} 실적은 시작일부터 쌓여요.</div>}
+              <div className="lab">① {startsLater ? '지금까지 탄 것' : '등급 시작일 이전에 탄 것'} (평생 누적용)</div>
               <div className="row2">{num('preKE', '대한항공 + 스카이팀 탑승 마일')}{num('preOZ', '아시아나 탑승 마일')}</div>
               <p className="help" style={{ margin: 0 }}>아시아나는 아시아나클럽의 <b>탑승 마일만</b> 넣어 주세요 (카드·제휴 적립 제외). 대한항공이 통합 후 아시아나 운항편 탑승 마일도 우수회원 심사에 합산한다고 안내해서 평생 누적에 더해요.</p>
-              <div className="lab" style={{ marginTop: 4 }}>② 등급 시작일 이후에 탄 것</div>
-              <div className="row2">{num('perKE', '대한항공 탑승 마일')}{num('perPts', '탑승 횟수 포인트', 'P')}</div>
-              <div className="row2">{num('perST', '스카이팀 탑승 마일')}{num('perOT', '기타 제휴 항공사 마일')}</div>
+              {!startsLater && (
+                <>
+                  <div className="lab" style={{ marginTop: 4 }}>② 등급 시작일 이후에 탄 것</div>
+                  <div className="row2">{num('perKE', '대한항공 탑승 마일')}{num('perPts', '탑승 횟수 포인트', 'P')}</div>
+                  <div className="row2">{num('perST', '스카이팀 탑승 마일')}{num('perOT', '기타 제휴 항공사 마일')}</div>
+                </>
+              )}
               <p className="help" style={{ margin: 0 }}>①은 모닝캄 프리미엄(평생 50만)·밀리언 마일러 진행률에, ②는 모닝캄 유지·셀렉트 승급에 쓰여요. 모닝캄 유지의 ‘대한항공 편 2만 마일’ 조건은 대한항공 칸만 세요.</p>
             </>
           )}

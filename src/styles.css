@@ -386,3 +386,13 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .app.mob .input { font-size: 16px; }
 /* 하단 고정 바가 있는 화면은 스크롤 아래 여백을 없애 바가 맨 아래에 붙도록 */
 .app.mob .scroll.no-tabs:has(.sumbar) { padding-bottom: 0; }
+.months-x span { white-space: nowrap; overflow: visible; }
+.months-x span.now { color: var(--sky-ink); font-weight: 800; }
+.months .m.now::before { content: ''; position: absolute; inset: -4px -2px; border-radius: 6px; background: var(--sky-soft); z-index: -1; }
+.months { position: relative; z-index: 0; }
+.sub-h { padding: 12px 20px 4px; font-size: 12px; font-weight: 800; letter-spacing: 0; }
+.sub-h.good { color: var(--good); }
+.sub-h.bad { color: var(--warn); }
+.sub-h + .trow { border-top: 0; }
+.more-btn { display: flex; align-items: center; justify-content: center; gap: 4px; width: calc(100% - 32px); margin: 8px 16px 4px; min-height: 44px; border-radius: 12px; background: var(--bg-2); color: var(--ink); font-size: 14px; font-weight: 700; }
+.notice.info { background: var(--sky-soft); color: var(--sky-ink); }

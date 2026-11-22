@@ -420,6 +420,14 @@ export function TierView({ ctx, goals, stats, head, onSettings }) {
 
       {(() => {
         const t = profile?.tier || 'SKYPASS';
+        const later = (t === 'MC' || t === 'MCS') && profile?.periodStart > today;
+        if (later) {
+          return (
+            <div className="notice info" style={{ margin: '12px 16px 0' }}>
+              {TIER[t].name} 실적은 등급 시작일 <b>{fmtDot(profile.periodStart)}</b>부터 쌓여요 (D-{daysBetween(today, profile.periodStart)}). 그 전에 탄 마일은 모닝캄 프리미엄·밀리언 마일러 평생 누적에만 들어가요.
+            </div>
+          );
+        }
         const keys = t === 'MC' || t === 'MCS' ? ['perKE', 'perST', 'perOT', 'perPts'] : BASE_KEYS[t] || [];
         if (!keys.length || keys.some((k) => +profile?.base?.[k] > 0)) return null;
         const since = t === 'MC' || t === 'MCS' ? `등급 시작일${profile?.periodStart ? `(${fmtDot(profile.periodStart)})` : ''} 이후` : t === 'SKYPASS' ? '스카이패스 가입 후' : '지금까지';
@@ -496,8 +504,13 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
   const priced = stats.groups.filter((g) => g.perMile != null);
   const unpriced = stats.groups.filter((g) => g.perMile == null && g.miles > 0);
   const maxPM = Math.max(1, ...priced.map((g) => g.perMile));
+  const [allTrips, setAllTrips] = useState(false);
+  const byPM = [...priced].sort((a, b) => a.perMile - b.perMile);
+  const split = priced.length > 10 && !allTrips;
+  const bestList = split ? byPM.slice(0, 5) : [];
+  const worstList = split ? byPM.slice(-5).reverse() : [];
   const bestPM = priced.length ? Math.min(...priced.map((g) => g.perMile)) : null;
-  // 월별 적립
+  // 월별 적립: 이번 달 기준 앞뒤 6개월 (13개월)
   const months = useMemo(() => {
     const m = new Map();
     for (const f of ctx.flights) {
@@ -506,16 +519,14 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
       if (!m.has(k)) m.set(k, { c: 0, p: 0 });
       m.get(k)[f.date < today ? 'c' : 'p'] += earnedMiles(f);
     }
-    const keys = [...m.keys()].sort();
-    if (!keys.length) return [];
+    if (!m.size) return [];
+    const [ty, tm] = today.split('-').map(Number);
     const out = [];
-    let [y, mo] = keys[0].split('-').map(Number);
-    const [ey, em] = keys[keys.length - 1].split('-').map(Number);
-    while ((y < ey || (y === ey && mo <= em)) && out.length < 24) {
+    for (let d = -6; d <= 6; d++) {
+      const t = ty * 12 + (tm - 1) + d;
+      const y = Math.floor(t / 12), mo = (t % 12) + 1;
       const k = `${y}-${String(mo).padStart(2, '0')}`;
-      out.push({ k, mo, ...(m.get(k) || { c: 0, p: 0 }) });
-      mo++;
-      if (mo > 12) { mo = 1; y++; }
+      out.push({ k, y, mo, now: d === 0, ...(m.get(k) || { c: 0, p: 0 }) });
     }
     return out;
   }, [ctx.flights, today]);
@@ -525,6 +536,19 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
     const codes = [fl[0].from, ...fl.map((x) => x.to)];
     return codes.map(city).join(' → ');
   };
+  const TripRow = ({ g }) => (
+    <button className="trow num" onClick={() => onOpen(g.flights[0].id)}>
+      <div>
+        <div className="rt">{tripTitle(g)}</div>
+        <div className="dt">{fmtDate(g.flights[0].date, { weekday: false })}{g.flights.length > 1 ? ` · ${g.flights.length}구간` : ''} · {g.flights[0].date < today ? '탑승 완료' : '예정'}</div>
+      </div>
+      <div>
+        <div className={`pm ${g.perMile === bestPM && priced.length > 1 ? 'best' : ''}`}>{fmtWon(g.perMile)}</div>
+        <div className="sub">{fmtWonShort(g.cost)} · {fmtNum(g.miles)}마일</div>
+      </div>
+      <Bar conf={g.perMile / maxPM} thin />
+    </button>
+  );
   return (
     <>
       {head}
@@ -545,34 +569,35 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
       {months.length > 0 && (
         <div className="pad" style={{ marginTop: 10 }}>
           <div className="card">
-            <div className="card-h"><span>월별 적립 마일</span><span className="legend"><span>확정</span><span className="p">예정</span></span></div>
+            <div className="card-h"><span>월별 적립 마일 <span className="faint" style={{ fontWeight: 600 }}>· 앞뒤 6개월</span></span><span className="legend"><span>확정</span><span className="p">예정</span></span></div>
             <div className="months" role="img" aria-label="월별 적립 마일 막대">
               {months.map((x) => (
-                <div className="m" key={x.k} title={`${x.k} · 확정 ${fmtNum(x.c)} · 예정 ${fmtNum(x.p)}`}>
+                <div className={`m ${x.now ? 'now' : ''}`} key={x.k} title={`${x.k} · 확정 ${fmtNum(x.c)} · 예정 ${fmtNum(x.p)}`}>
                   {x.p > 0 && <i className="p" style={{ height: `${(x.p / mmax) * 100}%` }} />}
                   {x.c > 0 && <i className="c" style={{ height: `${(x.c / mmax) * 100}%`, borderRadius: x.p > 0 ? 0 : '4px 4px 0 0' }} />}
                 </div>
               ))}
             </div>
-            <div className="months-x num">{months.map((x, i) => <span key={x.k}>{months.length > 12 && i % 2 ? '' : `${x.mo}월`}</span>)}</div>
+            <div className="months-x num">{months.map((x, i) => <span key={x.k} className={x.now ? 'now' : ''}>{x.now ? '이번 달' : i % 2 ? '' : x.mo === 1 || i === 0 ? `${String(x.y).slice(2)}.${x.mo}월` : `${x.mo}월`}</span>)}</div>
           </div>
         </div>
       )}
       <div className="section-h"><span>여정별 단가</span><span className="faint">낮을수록 효율적</span></div>
       {priced.length === 0 && <p className="muted" style={{ margin: '4px 20px' }}>운임이 입력된 여정이 아직 없어요.</p>}
-      {priced.map((g) => (
-        <button className="trow num" key={g.id} onClick={() => onOpen(g.flights[0].id)}>
-          <div>
-            <div className="rt">{tripTitle(g)}</div>
-            <div className="dt">{fmtDate(g.flights[0].date, { weekday: false })}{g.flights.length > 1 ? ` · ${g.flights.length}구간` : ''} · {g.flights[0].date < today ? '탑승 완료' : '예정'}</div>
-          </div>
-          <div>
-            <div className={`pm ${g.perMile === bestPM && priced.length > 1 ? 'best' : ''}`}>{fmtWon(g.perMile)}</div>
-            <div className="sub">{fmtWonShort(g.cost)} · {fmtNum(g.miles)}마일</div>
-          </div>
-          <Bar conf={g.perMile / maxPM} thin />
-        </button>
-      ))}
+      {split ? (
+        <>
+          <div className="sub-h good">베스트 5</div>
+          {bestList.map((g) => <TripRow key={g.id} g={g} />)}
+          <div className="sub-h bad">워스트 5</div>
+          {worstList.map((g) => <TripRow key={g.id} g={g} />)}
+          <button className="more-btn" onClick={() => setAllTrips(true)}>전체 {priced.length}개 여정 보기 <Icon name="chev" size={14} /></button>
+        </>
+      ) : (
+        <>
+          {priced.map((g) => <TripRow key={g.id} g={g} />)}
+          {priced.length > 10 && <button className="more-btn" onClick={() => setAllTrips(false)}>베스트·워스트 5만 보기</button>}
+        </>
+      )}
       {unpriced.length > 0 && (
         <>
           <div className="section-h"><span>운임 미입력</span><span className="faint">{unpriced.length}개 여정</span></div>
