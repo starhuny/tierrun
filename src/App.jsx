@@ -63,7 +63,9 @@ export default function App() {
 
   const loadFrom = async (a) => {
     try {
-      const s = await a.load();
+      const s0 = await a.load();
+      // 아시아나 편은 대한항공 실적으로 (예전에 '제휴'로 저장된 것 고침)
+      const s = { ...s0, flights: (s0.flights || []).map((f) => (f.airline === 'OZ' && f.credit === 'OT' ? { ...f, credit: 'KE' } : f)) };
       setState(s);
       loaded.current = true;
       setPhase('ready');
@@ -292,7 +294,7 @@ export default function App() {
       />
     );
   } else if (view?.name === 'import') {
-    content = <ImportFlighty ctx={ctx} onImport={importFlights} onClose={() => setStack(null)} />;
+    content = <ImportFlighty ctx={ctx} onImport={importFlights} onClose={() => setStack(null)} onSettings={() => setStack({ name: 'settings' })} />;
   } else if (view?.name === 'form') {
     const tripFl = view.tripId ? sortFlights(flights.filter((f) => f.tripId === view.tripId)) : view.flightId ? flights.filter((f) => f.id === view.flightId) : null;
     content = (

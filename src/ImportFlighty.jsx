@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { readFlighty, GROUP_LABEL } from './flighty.js';
-import { earnedMiles, fmtDate, fmtNum, fmtDot, baselineDate } from './core.js';
+import { earnedMiles, fmtDate, fmtNum, fmtDot, baselineDate, BASE_KEYS } from './core.js';
+import { TIER } from './skypass.js';
 import { findAirport } from './airports.js';
 import { Icon, AirlineMark } from './ui.jsx';
 
@@ -13,7 +14,46 @@ const STEPS = [
   ['확인하고 추가', <>대한항공·스카이팀·아시아나 항공편만 골라서 보여줘요. 넣을 항공편을 확인하고 <b>추가</b>를 누르면 끝이에요.</>],
 ];
 
-export default function ImportFlighty({ ctx, onImport, onClose }) {
+const BASE_LABEL = {
+  preKE: '① 시작일 이전 · 대한항공+스카이팀', preOZ: '① 시작일 이전 · 아시아나',
+  perKE: '② 시작일 이후 · 대한항공', perST: '② 시작일 이후 · 스카이팀', perOT: '② 시작일 이후 · 기타 제휴', perPts: '② 시작일 이후 · 탑승 포인트',
+  lifeKE: '대한항공 탑승', lifeST: '스카이팀 탑승', lifeOT: '기타 제휴', lifePts: '탑승 포인트', lifeOZ: '아시아나 탑승',
+};
+
+// 설정에 넣어 둔 실적 숫자를 보여주고, CSV와 겹치지 않게 확인하라는 안내
+function BaseCheck({ profile, onSettings }) {
+  const tier = profile?.tier || 'SKYPASS';
+  const keys = BASE_KEYS[tier] || [];
+  if (!keys.length) return null;
+  const b = profile?.base || {};
+  const filled = keys.filter((k) => +b[k] > 0);
+  const bd = baselineDate(profile);
+  return (
+    <div className={`notice ${filled.length ? '' : 'info'}`} style={{ marginTop: 12 }}>
+      <b>먼저 설정에 넣은 실적 숫자를 확인해 주세요</b>
+      {filled.length ? (
+        <>
+          <div className="base-list num">
+            {filled.map((k) => (
+              <div key={k}><span>{BASE_LABEL[k]}</span><b>{fmtNum(+b[k])}{k.endsWith('Pts') ? 'P' : '마일'}</b></div>
+            ))}
+          </div>
+          <p style={{ margin: '6px 0 0' }}>
+            이 숫자는 {bd ? `${fmtDot(bd)}까지` : '입력한 날까지'} 탄 실적({TIER[tier].name} 기준)으로 저장돼 있어요. 그래서 <b>{bd ? `${fmtDot(bd)} 이전` : '입력한 날 이전'} 항공편은 CSV로 가져와도 실적에 더하지 않아요</b> (중복 방지).
+          </p>
+          <p style={{ margin: '6px 0 0' }}>
+            CSV의 지난 항공편으로 실적을 처음부터 계산하고 싶다면, 설정에서 실적 숫자를 <b>0으로 바꾼 뒤</b> 가져와 주세요. 이 숫자가 정확하다면 그대로 두고 가져와도 돼요.
+          </p>
+        </>
+      ) : (
+        <p style={{ margin: '4px 0 0' }}>지금은 실적 숫자가 모두 0이라, 가져온 항공편이 그대로 실적에 들어가요. 대한항공 홈페이지 실적과 맞는지 가져온 뒤 등급 탭에서 확인해 보세요.</p>
+      )}
+      {onSettings && <button className="link" style={{ marginTop: 6 }} onClick={onSettings}>설정에서 실적 숫자 확인하기</button>}
+    </div>
+  );
+}
+
+export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
   const { flights, profile } = ctx;
   const fileRef = useRef(null);
   const [res, setRes] = useState(null);
@@ -80,6 +120,7 @@ export default function ImportFlighty({ ctx, onImport, onClose }) {
               </li>
             ))}
           </ol>
+          <BaseCheck profile={profile} onSettings={onSettings} />
           <div className="notice info" style={{ marginTop: 12 }}>
             가져온 항공편은 <b>적립률 100%</b>로 들어가요. 예약 등급에 따라 적립률이 다르면 항공편을 눌러 <b>편집</b>에서 고쳐 주세요. 운임·예약 등급·메모는 비어 있어요.
           </div>
@@ -112,9 +153,10 @@ export default function ImportFlighty({ ctx, onImport, onClose }) {
                 {dupCount > 0 && ` 이미 앱에 있는 같은 편명·날짜 ${dupCount}편은 체크를 풀어 뒀어요.`}
               </p>
             </div>
+            <BaseCheck profile={profile} onSettings={onSettings} />
             {beforeBase > 0 && (
               <div className="notice" style={{ marginTop: 10 }}>
-                설정에 넣은 실적 숫자는 {fmtDot(bd)}까지의 실적이에요. 고른 항공편 중 {beforeBase}편은 그 날짜 이전이라 목록에는 보이지만 실적에 다시 더하지는 않아요.
+                고른 항공편 중 <b>{beforeBase}편</b>은 {fmtDot(bd)} 이전이라, 추가해도 목록에만 보이고 실적에는 더하지 않아요.
               </div>
             )}
           </div>
@@ -151,6 +193,7 @@ export default function ImportFlighty({ ctx, onImport, onClose }) {
             <div className="line num">
               <span><b>{chosen.length}편</b> · 적립률 100% 기준 <b>{fmtNum(totalMi)}마일</b></span>
             </div>
+            {beforeBase > 0 && <div className="help" style={{ color: 'var(--warn)', margin: 0 }}>{beforeBase}편은 설정의 실적 숫자와 겹쳐 실적에 더하지 않아요.</div>}
             <button className="btn primary block" disabled={!chosen.length} onClick={() => onImport(chosen.map((x) => x.flight))}>{chosen.length}편 추가</button>
           </div>
         </>

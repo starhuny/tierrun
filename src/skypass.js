@@ -137,7 +137,7 @@ export const AIRLINES = [
   { code: 'ME', name: '미들이스트항공', credit: 'ST', color: '#00733a' },
   { code: 'SV', name: '사우디아', credit: 'ST', color: '#0b6b4f' },
   { code: 'RO', name: '타롬', credit: 'ST', color: '#0a3c7d' },
-  { code: 'OZ', name: '아시아나항공', credit: 'OT', color: '#8b1f2d' },
+  { code: 'OZ', name: '아시아나항공', credit: 'KE', color: '#8b1f2d' }, // 통합 후 대한항공 실적으로 계산
   { code: 'CZ', name: '중국남방항공', credit: 'OT', color: '#0b6db5' },
   { code: 'EY', name: '에티하드항공', credit: 'OT', color: '#a37d2c' },
   { code: 'AA', name: '아메리칸항공', credit: 'OT', color: '#36495a' },

@@ -253,7 +253,7 @@ export function computeGoals(profile, flights, today) {
     goals.push(goal({
       id: 'mcQualify', kind: 'qualify', target: 'MC', title: '모닝캄 승급', scope: '가입 후 누적 · 기간 제한 없음',
       options: [
-        { label: `대한항공 + 제휴 항공사 ${fmtNum(R.mcQualify.total)}마일`, note: `이 중 ${fmtNum(R.mcQualify.keMin)}마일 이상은 대한항공 편 탑승이어야 해요 (스카이팀 제외)`, parts: [
+        { label: `대한항공 + 제휴 항공사 ${fmtNum(R.mcQualify.total)}마일`, note: `이 중 ${fmtNum(R.mcQualify.keMin)}마일 이상은 대한항공 편 탑승이어야 해요 (아시아나 포함, 스카이팀 제외)`, parts: [
           part('전체 (대한항공 + 스카이팀·제휴)', L.ke + L.st + L.ot, Lp.ke + Lp.st + Lp.ot, R.mcQualify.total),
           part('대한항공 편 탑승만', L.ke, Lp.ke, R.mcQualify.keMin),
         ] },
@@ -272,7 +272,7 @@ export function computeGoals(profile, flights, today) {
     goals.push(goal({
       id: 'mcRetain', kind: 'retain', target: 'MC', title: '모닝캄 유지', scope: '자격 유효기간 2년 내', deadline,
       options: [
-        { label: `${fmtNum(R.mcRetain.total)}마일 적립`, note: `이 중 ${fmtNum(R.mcRetain.keMin)}마일 이상은 대한항공 편 탑승이어야 해요 (스카이팀 제외)`, parts: [
+        { label: `${fmtNum(R.mcRetain.total)}마일 적립`, note: `이 중 ${fmtNum(R.mcRetain.keMin)}마일 이상은 대한항공 편 탑승이어야 해요 (아시아나 포함, 스카이팀 제외)`, parts: [
           part('전체 (대한항공 + 스카이팀·제휴)', P.ke + P.st + P.ot, Pp.ke + Pp.st + Pp.ot, R.mcRetain.total),
           part('대한항공 편 탑승만', P.ke, Pp.ke, R.mcRetain.keMin),
         ] },
