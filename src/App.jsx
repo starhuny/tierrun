@@ -6,7 +6,7 @@ import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
 import ImportFlighty from './ImportFlighty.jsx';
-import { FriendsView, FriendView } from './Friends.jsx';
+import { FriendsView, FriendView, FriendsSection } from './Friends.jsx';
 import { AircraftView } from './Aircraft.jsx';
 import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
@@ -594,6 +594,8 @@ export default function App() {
     );
   } else if (tab === 'tier') {
     const wl = walletOf(profile);
+    // 친구 목록은 어떤 프로그램을 보든 등급 현황 아래에 같이 보여줌
+    const friendsBox = { on: !!social, err: friendsErr, onFriends: () => { loadFriends(true); setStack({ name: 'friends' }); }, onOpen: (uid) => setStack({ name: 'friend', uid }), onMount: () => loadFriends() };
     const cur = wl.find((w) => w.program === tierProg)?.program || wl[0]?.program;
     const head = (
       <>
@@ -608,15 +610,16 @@ export default function App() {
           prog={asProg}
           ctx={ctx}
           head={head}
+          footer={<FriendsSection ctx={ctx} box={friendsBox} />}
           onSetMethod={(m) => { patchProg('AS', { method: m }); say('적립 방식을 바꿨어요. 2027년 이후 항공편에 적용돼요'); }}
           onRewards={(yr, sp, ids) => patchProg('AS', (x) => ({ rewards: { ...(x.rewards || {}), [yr]: { ...(x.rewards?.[yr] || {}), [sp]: ids } } }))}
           onOpen={open}
         />
       );
     } else if (cur === 'KE') {
-    content = <TierView ctx={ctx} goals={goals} stats={stats} head={head} onSettings={() => setStack({ name: 'settings' })} friendsBox={{ on: !!social, err: friendsErr, onFriends: () => { loadFriends(true); setStack({ name: 'friends' }); }, onOpen: (uid) => setStack({ name: 'friend', uid }), onMount: () => loadFriends() }} />;
+    content = <TierView ctx={ctx} goals={goals} stats={stats} head={head} onSettings={() => setStack({ name: 'settings' })} friendsBox={friendsBox} />;
     } else {
-      content = <>{head}<div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div></>;
+      content = <>{head}<div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div><FriendsSection ctx={ctx} box={friendsBox} /></>;
     }
   } else if (tab === 'cost') {
     content = <CostView ctx={ctx} goals={goals} stats={stats} head={<Head title="마일당 단가" right={avatar} />} onOpen={open} />;

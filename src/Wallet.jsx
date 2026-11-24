@@ -331,7 +331,7 @@ function SpRow({ r, onOpen, today }) {
   );
 }
 
-export function AlaskaView({ prog, ctx, head, onEdit, onBack, onSetMethod, onRewards, onOpen }) {
+export function AlaskaView({ prog, ctx, head, footer, onEdit, onBack, onSetMethod, onRewards, onOpen }) {
   const { flights, today } = ctx;
   const yr0 = thisYear(today);
   const years = [yr0, yr0 + 1];
@@ -392,6 +392,7 @@ export function AlaskaView({ prog, ctx, head, onEdit, onBack, onSetMethod, onRew
 
       {tab === 'ms' && <MilestonesTab prog={prog} s={s} yr={yr} onRewards={onRewards} />}
       {tab === 'cmp' && <CompareTab prog={prog} ctx={ctx} yr={yr} onSetMethod={onSetMethod} onOpen={onOpen} />}
+      {footer}
     </div>
   );
 }
