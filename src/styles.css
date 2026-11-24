@@ -661,3 +661,8 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .wmenu small { display: block; font-size: 12px; font-weight: 600; color: var(--ink-3); margin-top: 1px; }
 .map-who { position: absolute; top: 16px; z-index: 3; padding: 8px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--map-pill); color: var(--map-pill-ink); box-shadow: var(--shadow-sm); }
 .app.mob .map-who { top: calc(14px + env(safe-area-inset-top)); }
+.yr-rule { display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; font-size: 13px; }
+.yr-rule b { font-size: 13px; }
+.yr-rule span { font-size: 12px; opacity: 0.85; }
+.yr-rule.y26 { background: light-dark(#fdf3e4, #3a2c14); color: light-dark(#7a4a0c, #f5cf8f); }
+.yr-rule.y27 { background: light-dark(#dfeef7, #0f3550); color: light-dark(#01426a, #9fd2f5); }

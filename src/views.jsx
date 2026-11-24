@@ -412,7 +412,7 @@ function AsEarnCard({ f, ctx }) {
         <div className="card-h"><span>알래스카 상태포인트</span><span className="badge cr-AS">{METHOD[m].name}</span></div>
         <div className="calc num">
           <span className="muted">계산</span><b style={{ fontSize: 14 }}>{r.why}</b>
-          {!isOwn(f.airline) && !f.award && <><span className="muted">좌석 구분 {cat.how === 'table' ? `(${f.cls} 클래스 표)` : cat.how === 'guess' ? '(예약 클래스 미입력)' : ''}</span><b style={{ fontSize: 14 }}>{CAT[cat.cat].name}</b></>}
+          {!f.award && (m === 'legacy' || !isOwn(f.airline)) && <><span className="muted">좌석 구분 {cat.how === 'table' ? `(${f.cls} 클래스 표)` : cat.how === 'guess' ? '(예약 클래스 미입력)' : ''}</span><b style={{ fontSize: 14 }}>{m === 'legacy' ? (['C', 'F'].includes(cat.cat) ? '비즈니스·퍼스트 125%' : '이코노미 100%') : `${CAT[cat.cat].name} ${CAT[cat.cat].rate}%`}</b></>}
           <div className="eq">
             <span className="muted">{past ? '적립' : '적립 예정'}</span>
             <b>{fmtNum(r.sp)}<small style={{ fontSize: 14, marginLeft: 3 }}>SP</small></b>
@@ -421,15 +421,19 @@ function AsEarnCard({ f, ctx }) {
         {r.est && <div className="notice" style={{ marginTop: 10 }}>{f.award ? '마일 항공권은 사용한 포인트를 넣으면 달러 기준 적립을 계산해요.' : isOwn(f.airline) ? '알래스카·하와이안 편은 세금을 뺀 운임(USD)을 넣으면 정확해져요.' : '예약 클래스를 넣으면 좌석 구분을 정확히 판정해요.'}</div>}
         {!prog && <div className="notice" style={{ marginTop: 10 }}>알래스카 티어가 지갑에 없어요. 지갑에서 추가하면 등급 진행률에 들어가요.</div>}
       </div>
-      <div className="card">
-        <div className="card-h"><span>방식별로 계산하면</span>{yr < 2027 && <span className="faint">2027년부터 고를 방식</span>}</div>
-        <div className="mini3 num">
-          {METHODS.map((x) => {
-            const v = spFor(f, x.id);
-            return <div key={x.id} className={x.id === m ? 'on' : ''}><span>{x.short}</span><b>{fmtNum(v.sp)}{v.est ? '*' : ''}</b></div>;
-          })}
+      {m === 'legacy' ? (
+        <div className="card"><p className="muted" style={{ margin: 0, fontSize: 14 }}>2026년 탑승분은 <b>2026년 기준</b>(구간 거리 1:1 · 500마일 미만은 500 · 비즈니스·퍼스트 125%)으로 계산해요. 2027년 1월 1일 출발편부터는 고른 적립 방식(거리·달러·구간)으로 계산돼요.</p></div>
+      ) : (
+        <div className="card">
+          <div className="card-h"><span>적립 방식별로 계산하면</span></div>
+          <div className="mini3 num">
+            {METHODS.map((x) => {
+              const v = spFor(f, x.id);
+              return <div key={x.id} className={x.id === m ? 'on' : ''}><span>{x.short}{x.id === m ? ' · 내 선택' : ''}</span><b>{fmtNum(v.sp)}{v.est ? '*' : ''}</b></div>;
+            })}
+          </div>
         </div>
-      </div>
+      )}
       {s && s.next && (
         <div className="card">
           <div className="card-h"><span>{yr}년 {s.goal}까지 기여</span><span className="faint">{past ? '확정' : '예정'}</span></div>

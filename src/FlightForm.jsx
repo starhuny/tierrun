@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AIRLINES, AIRLINE, CREDIT, CABINS, CABIN, cabinFromClass, AIRLINE_GROUPS } from './skypass.js';
 import { defaultProgram, hasProgram, progEntry } from './wallet.js';
-import { spFor, methodFor, METHODS, METHOD, CATS, CAT, asCategory, isOwn, isOneworld, METHOD_FROM_YEAR } from './alaska.js';
+import { spFor, methodFor, METHODS, METHOD, CATS, CAT, asCategory, isOwn, isOneworld, METHOD_FROM_YEAR, LEGACY } from './alaska.js';
 import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
@@ -435,16 +435,36 @@ function SegCard({ s, i, n, err, showPrice, myFlights, profile, asProg, onChange
 function AsFields({ s, prog, onChange, gc }) {
   const own = isOwn(s.airline);
   const m = methodFor(prog, s.date);
+  const legacy = m === 'legacy';
   const auto = asCategory({ ...s, asCat: '' });
   const r = spFor(s, m);
   const yr = +String(s.date || '').slice(0, 4) || null;
+  const hint = auto.how === 'table' ? ` (${s.cls} 클래스)` : auto.how === 'guess' ? ' (예약 클래스를 넣으면 정확)' : '';
+  // 2026년: 이코노미 100% · 비즈니스·퍼스트 125% / 2027년부터: 달러 기준 적립률
+  const legacyRate = (cat) => (['C', 'F'].includes(cat) ? LEGACY.premium : 100);
   return (
     <>
+      <div className={`yr-rule ${legacy ? 'y26' : 'y27'}`}>
+        <b>{legacy ? `${yr || 2026}년 탑승 · 2026년 기준` : `${yr}년 탑승 · 내가 고른 ${METHOD[m].name}`}</b>
+        <span>{legacy ? '구간 거리 1:1 · 500마일 미만은 500 · 비즈니스·퍼스트 125%' : METHOD[m].desc}</span>
+      </div>
       <label className="checkrow light">
         <input type="checkbox" checked={!!s.award} onChange={(e) => onChange({ award: e.target.checked })} />
         <span>마일 항공권 <small>(포인트로 발권 · 상태포인트만 적립)</small></span>
       </label>
-      {s.award ? (
+      {legacy ? (
+        !s.award && (
+          <label className="field">
+            <span>좌석 구분 <span className="faint">(2026년 적립률)</span></span>
+            <select className="input" value={s.asCat || ''} onChange={(e) => onChange({ asCat: e.target.value })}>
+              <option value="">자동 · {['C', 'F'].includes(auto.cat) ? '비즈니스·퍼스트' : '이코노미'} {legacyRate(auto.cat)}%{hint}</option>
+              <option value="Y">이코노미·프리미엄 이코노미 100%</option>
+              <option value="C">비즈니스 125%</option>
+              <option value="F">퍼스트 125%</option>
+            </select>
+          </label>
+        )
+      ) : s.award ? (
         <label className="field"><span>사용한 포인트 <span className="faint">(달러 기준일 때 20포인트당 1SP)</span></span><NumInput value={s.awardPts} suffix="포인트" onChange={(v) => onChange({ awardPts: v })} /></label>
       ) : own ? (
         <label className="field"><span>운임 (USD, 세금·수수료 제외) <span className="faint">· 달러 기준일 때 $1 = 5SP</span></span><NumInput value={s.usd} suffix="USD" onChange={(v) => onChange({ usd: v })} /></label>
@@ -452,28 +472,33 @@ function AsFields({ s, prog, onChange, gc }) {
         <label className="field">
           <span>좌석 구분 <span className="faint">(달러 기준 적립률)</span></span>
           <select className="input" value={s.asCat || ''} onChange={(e) => onChange({ asCat: e.target.value })}>
-            <option value="">자동 · {CAT[auto.cat].name} {CAT[auto.cat].rate}%{auto.how === 'table' ? ` (${s.cls} 클래스)` : auto.how === 'guess' ? ' (예약 클래스를 넣으면 정확)' : ''}</option>
+            <option value="">자동 · {CAT[auto.cat].name} {CAT[auto.cat].rate}%{hint}</option>
             {CATS.filter((c) => c.id !== 'X').map((c) => <option key={c.id} value={c.id}>{c.name} {c.rate}%</option>)}
           </select>
         </label>
       )}
       <div className="miles-out num">
         <div>
-          <div className="lab" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {METHOD[m].name} · {r.why}
-          </div>
+          <div className="lab" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>{r.why}</div>
           <b>{fmtNum(r.sp)}<small style={{ fontSize: 13, marginLeft: 3 }}>SP</small></b>{r.est && <span className="faint" style={{ marginLeft: 8, fontWeight: 700 }}>추정</span>}
         </div>
         <div style={{ display: 'grid', gap: 4, justifyItems: 'end' }}>
           <button className="link" style={{ fontSize: 12 }} onClick={() => onChange({ showBase: !s.showBase })}>구간 거리 수정</button>
         </div>
       </div>
-      <div className="mini3 num">
-        {METHODS.map((x) => {
-          const v = spFor(s, x.id);
-          return <div key={x.id} className={x.id === m ? 'on' : ''}><span>{x.short}</span><b>{fmtNum(v.sp)}</b></div>;
-        })}
-      </div>
+      {legacy ? (
+        <p className="help" style={{ margin: 0 }}>{METHOD_FROM_YEAR}년 1월 1일 출발편부터는 고른 적립 방식(거리·달러·구간)으로 계산돼요.</p>
+      ) : (
+        <>
+          <div className="lab">적립 방식별로 계산하면</div>
+          <div className="mini3 num">
+            {METHODS.map((x) => {
+              const v = spFor(s, x.id);
+              return <div key={x.id} className={x.id === m ? 'on' : ''}><span>{x.short}{x.id === m ? ' · 내 선택' : ''}</span><b>{fmtNum(v.sp)}</b></div>;
+            })}
+          </div>
+        </>
+      )}
       {!prog && <div className="notice">알래스카 티어가 지갑에 없어요. 지갑에서 추가하면 등급 진행률에 들어가요.</div>}
       {s.showBase && (
         <label className="field">
