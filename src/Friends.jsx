@@ -281,7 +281,7 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
                 {i === 0 && (
                   <div className="pad" style={{ marginTop: 10 }}>
                     <CardFace
-                      bg={x.at.bg} ink={x.at.ink} en="ALASKA ATMOS REWARDS" title={x.at.name} gem={x.at.gem} airline="AS"
+                      bg={x.at.bg} ink={x.at.ink} en="ALASKA ATMOS REWARDS" title={x.at.en} gem={x.at.gem} airline="AS"
                       sub={x.at.ow ? `원월드 ${x.at.ow}` : '원월드'}
                       foot={<div className="wline"><span>{fr.name}</span><span>{w.year} · {fmtNum(w.sp)} SP</span></div>}
                       conf={x.conf} plan={Math.max(0, x.all - x.conf)}

@@ -52,7 +52,7 @@ function asFace(prog, flights, today) {
   const t = s.held;
   const target = s.next ? s.next.sp : s.earned.sp || 1;
   return {
-    bg: t.bg, ink: t.ink, en: 'ALASKA ATMOS REWARDS', title: t.name, gem: t.gem, airline: 'AS',
+    bg: t.bg, ink: t.ink, en: 'ALASKA ATMOS REWARDS', title: t.en, gem: t.gem, airline: 'AS',
     sub: t.ow ? `원월드 ${t.ow}` : '원월드',
     foot: <div className="wline"><b>{s.next ? `${s.goal}까지 ${fmtNum(s.rem)} SP` : `${s.year}년 최고 등급 달성`}</b><span>{s.year} · {fmtNum(s.conf)} SP</span></div>,
     conf: Math.min(1, s.conf / target), plan: Math.min(1, s.all / target) - Math.min(1, s.conf / target),

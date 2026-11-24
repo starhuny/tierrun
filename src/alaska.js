@@ -9,11 +9,11 @@ export const AS_PROGRAM = 'AS';
 export const METHOD_FROM_YEAR = 2027;
 
 export const AS_TIERS = [
-  { id: 'MEMBER', name: '멤버', ow: '', sp: 0, bonus: 0, bg: 'linear-gradient(135deg,#0d5c8c 0%,#01426a 60%,#012c47 100%)', ink: '#ffffff', gem: null },
-  { id: 'SILVER', name: '실버', ow: '루비', sp: 20000, bonus: 25, bg: 'linear-gradient(135deg,#eef0f3 0%,#d3d7dd 55%,#b9bec6 100%)', ink: '#14253a', gem: '#b3123a' },
-  { id: 'GOLD', name: '골드', ow: '사파이어', sp: 40000, bonus: 50, bg: 'linear-gradient(135deg,#ecd9a8 0%,#d2b26c 55%,#b8924a 100%)', ink: '#2b1d07', gem: '#1f4fb3' },
-  { id: 'PLAT', name: '플래티넘', ow: '에메랄드', sp: 80000, bonus: 100, bg: 'linear-gradient(135deg,#5e6b7a 0%,#3f4a57 55%,#2a323c 100%)', ink: '#ffffff', gem: '#13a36b' },
-  { id: 'TITAN', name: '티타늄', ow: '에메랄드', sp: 135000, bonus: 150, bg: 'linear-gradient(135deg,#2c2e33 0%,#18191c 55%,#0b0b0d 100%)', ink: '#ffffff', gem: '#13a36b' },
+  { id: 'MEMBER', name: '멤버', en: 'Member', ow: '', sp: 0, bonus: 0, bg: 'linear-gradient(135deg,#0d5c8c 0%,#01426a 60%,#012c47 100%)', ink: '#ffffff', gem: null },
+  { id: 'SILVER', name: '실버', en: 'Silver', ow: '루비', sp: 20000, bonus: 25, bg: 'linear-gradient(135deg,#eef0f3 0%,#d3d7dd 55%,#b9bec6 100%)', ink: '#14253a', gem: '#b3123a' },
+  { id: 'GOLD', name: '골드', en: 'Gold', ow: '사파이어', sp: 40000, bonus: 50, bg: 'linear-gradient(135deg,#ecd9a8 0%,#d2b26c 55%,#b8924a 100%)', ink: '#2b1d07', gem: '#1f4fb3' },
+  { id: 'PLAT', name: '플래티넘', en: 'Platinum', ow: '에메랄드', sp: 80000, bonus: 100, bg: 'linear-gradient(135deg,#5e6b7a 0%,#3f4a57 55%,#2a323c 100%)', ink: '#ffffff', gem: '#13a36b' },
+  { id: 'TITAN', name: '티타늄', en: 'Titanium', ow: '에메랄드', sp: 135000, bonus: 150, bg: 'linear-gradient(135deg,#2c2e33 0%,#18191c 55%,#0b0b0d 100%)', ink: '#ffffff', gem: '#13a36b' },
 ];
 export const AS_TIER = Object.fromEntries(AS_TIERS.map((t) => [t.id, t]));
 
