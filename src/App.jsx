@@ -419,6 +419,11 @@ export default function App() {
     setStack(null);
   };
 
+  // 친구·지갑 화면은 맨 위부터
+  useEffect(() => {
+    if (['friend', 'friends', 'wallet', 'tieradd'].includes(stack?.name)) scrollRef.current?.scrollTo?.(0, 0);
+  }, [stack?.name, stack?.uid]);
+
   if (phase === 'boot') return <div className="loading"><span className="spin" />불러오는 중…</div>;
   if (phase === 'error') return <div className="loading"><p>{bootErr}</p></div>;
   if (phase === 'login') {
@@ -567,7 +572,7 @@ export default function App() {
     content = <FriendsView ctx={ctx} social={!!social} err={friendsErr} invite={profile?.invite} onOpen={(uid) => setStack({ name: 'friend', uid })} onRemove={removeFriend} onReset={resetInvite} onRefresh={() => loadFriends(true)} onClose={() => setStack(null)} say={say} />;
   } else if (view?.name === 'friend') {
     const fr = friends.find((x) => x.uid === view.uid);
-    content = fr ? <FriendView fr={fr} ctx={ctx} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
+    content = fr ? <FriendView fr={fr} ctx={ctx} mobile={mobile} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
   } else if (view?.name === 'aircraft') {
     content = <AircraftView ctx={ctx} onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'aircraft' }); }} onClose={() => setStack(null)} onFriend={(uid) => setStack({ name: 'friend', uid })} />;
   } else if (view?.name === 'import') {
@@ -669,19 +674,27 @@ export default function App() {
   );
 
   const showGlobe = !mobile || onMap;
+  // 친구 화면을 보고 있으면 지도에 친구의 다가오는 항공편을 그림
+  const frOnMap = view?.name === 'friend' ? friends.find((x) => x.uid === view.uid) : null;
+  const frFlights = frOnMap ? (frOnMap.upcoming || []).filter((u) => u.date >= today).map((u, i) => ({ ...u, id: `fr-${i}` })) : null;
   return (
     <div className={`app ${mobile ? 'mob' : 'desk'} ${onMap ? 'on-map' : ''}`}>
       {showGlobe && (
         <div className="map-layer" id="map">
           <Globe
-            flights={flights}
-            selectedId={sel}
-            onSelect={(id) => (mobile ? setSel(id) : open(id))}
+            flights={frFlights || flights}
+            selectedId={frFlights ? null : sel}
+            onSelect={(id) => (frFlights ? null : mobile ? setSel(id) : open(id))}
             insetLeft={mobile ? 0 : panelW + 32}
             insetBottom={mobile ? 170 : 0}
             today={today}
-            fitKey={flights.length}
+            fitKey={frOnMap ? `fr:${frOnMap.uid}` : flights.length}
           />
+          {frOnMap && (
+            <div className="map-who" style={{ left: mobile ? 16 : panelW + 48 }}>
+              <b>{frOnMap.name || '친구'}</b>님의 다가오는 항공편 {frFlights.length}편
+            </div>
+          )}
           <div className="map-ctrls" style={mobile ? { top: 'calc(14px + env(safe-area-inset-top))' } : null}>
             <button onClick={() => document.querySelector('#map .globe').__globe?.zoom(1.6)} aria-label="확대"><Icon name="plus" size={18} /></button>
             <button onClick={() => document.querySelector('#map .globe').__globe?.zoom(1 / 1.6)} aria-label="축소"><Icon name="minus" size={18} /></button>

@@ -7,6 +7,7 @@ import { inviteLink, flightKey } from './social.js';
 import { aircraftTop } from './aircraft.js';
 import { AS_TIER } from './alaska.js';
 import { CardFace } from './Wallet.jsx';
+import Globe from './Globe.jsx';
 
 const city = (c) => findAirport(c)?.city || c || '?';
 
@@ -223,7 +224,7 @@ export function FriendsView({ ctx, social, err, invite, onOpen, onRemove, onRese
 }
 
 // 친구 한 명: 등급 카드, 진행률, 다가오는 항공편
-export function FriendView({ fr, ctx, onRemove, onBack }) {
+export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
   const [ask, setAsk] = useState(false);
   const t = TIER[fr.tier] || TIER.SKYPASS;
   const g = fr.goal;
@@ -242,6 +243,11 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
         <p className="muted" style={{ margin: '12px 20px' }}>친구가 아직 새 버전의 티어런을 열지 않아 정보가 없어요. 친구가 앱을 한 번 열면 보여요.</p>
       ) : (
         <>
+          {mobile && up.length > 0 && (
+            <div className="mini-map">
+              <Globe flights={up.map((u, i) => ({ ...u, id: `fr-${i}` }))} today={today} interactive={false} fitKey={fr.uid} />
+            </div>
+          )}
           {orderOf(fr).map((p, i) => (p === 'KE' ? (
             <Fragment key="KE">
               {i === 0 && (
