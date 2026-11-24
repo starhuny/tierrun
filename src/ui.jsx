@@ -39,11 +39,20 @@ export function Icon({ name, size = 20, stroke = 2, fill = false, ...rest }) {
 // 항공사 로고 (공개 로고 이미지 → 실패하면 글자 마크)
 const LOGO_SRC = [(c) => `https://images.kiwi.com/airlines/64/${c}.png`, (c) => `https://pics.avs.io/al_square/64/64/${c}.png`];
 const logoFail = new Map(); // 코드별로 실패한 단계 기억
+// 직접 넣은 로고 (public/logos) — 있으면 이걸 먼저 씀
+const CUSTOM_LOGO = { CX: '/logos/CX.png' };
 export function AirlineMark({ code, size }) {
   const a = AIRLINE[code];
   const c = String(code || '').toUpperCase();
   const [step, setStep] = useState(() => logoFail.get(c) || 0);
   const cls = `mark ${size === 'sm' ? 'sm' : size === 'xs' ? 'xs' : ''}`;
+  if (CUSTOM_LOGO[c]) {
+    return (
+      <span className={`${cls} logo`} title={a?.name || c}>
+        <img src={CUSTOM_LOGO[c]} alt={a?.name || c} />
+      </span>
+    );
+  }
   if (/^[A-Z0-9]{2}$/.test(c) && step < LOGO_SRC.length) {
     return (
       <span className={`${cls} logo`} title={a?.name || c}>
