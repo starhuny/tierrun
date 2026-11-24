@@ -57,6 +57,7 @@ export function parseOverpass(json, lat, lon) {
 }
 
 export default async function handler(req, res) {
+  if (req.query.ping) return res.status(200).json({ ok: true, brand: detectBrand('Novotel Suites Hanoi') });
   const lat = Math.round(+req.query.lat * 100) / 100, lon = Math.round(+req.query.lon * 100) / 100;
   const r = Math.min(40000, Math.max(3000, +req.query.r || 25000));
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
@@ -66,10 +67,10 @@ export default async function handler(req, res) {
   const errs = [];
   const t0 = Date.now();
   for (const url of MIRRORS) {
-    if (Date.now() - t0 > 22000) break;
+    if (Date.now() - t0 > 14000) break;
     try {
       const ctl = new AbortController();
-      const tm = setTimeout(() => ctl.abort(), 12000);
+      const tm = setTimeout(() => ctl.abort(), 8000);
       const resp = await fetch(url, { method: 'POST', body, signal: ctl.signal, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'tierrun.vercel.app (hotel list)' } });
       clearTimeout(tm);
       if (!resp.ok) throw new Error(`${new URL(url).host} ${resp.status}`);
