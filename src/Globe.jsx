@@ -36,6 +36,7 @@ function readColors(el) {
 function fitTarget(segs, w, h, insetL, insetB, baseR) {
   const pts = [];
   for (const s of segs) {
+    if (s.pt) { pts.push(s.pt); continue; }
     const a = findAirport(s.from), b = findAirport(s.to);
     if (!a || !b) continue;
     const ip = geoInterpolate([a.lon, a.lat], [b.lon, b.lat]);
@@ -156,7 +157,7 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
     // 숙박 핀 (호텔): 둥근 사각형
     const pinAps = [];
     for (const pin of pn || []) {
-      const ap = findAirport(pin.code);
+      const ap = pin.lat != null ? { code: `pin:${pin.id}`, city: pin.label || '', lat: pin.lat, lon: pin.lon } : findAirport(pin.code);
       if (!ap) continue;
       const p = [ap.lon, ap.lat];
       if (!visible(p)) continue;
@@ -164,10 +165,10 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
       const isSel = pin.id === sel;
       ctx.globalAlpha = sel && !isSel ? 0.35 : 1;
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x - 6, y - 6, 12, 12, 3.5) : ctx.rect(x - 6, y - 6, 12, 12);
+      ctx.roundRect ? ctx.roundRect(x - 4, y - 4, 8, 8, 2.5) : ctx.rect(x - 4, y - 4, 8, 8);
       ctx.fillStyle = col.hotel;
       ctx.fill();
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.strokeStyle = col.halo;
       ctx.stroke();
       ctx.globalAlpha = 1;
@@ -242,7 +243,7 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
     const s = st.current;
     const { flights: fl, selectedId: sel, insetLeft: L, insetBottom: B } = props.current;
     if (!s.w) return;
-    const all = [...fl, ...(props.current.pins || []).map((p) => ({ id: p.id, from: p.code, to: p.code }))];
+    const all = [...fl, ...(props.current.pins || []).map((p) => (p.lat != null ? { id: p.id, pt: [p.lon, p.lat] } : { id: p.id, from: p.code, to: p.code }))];
     const segs = sel ? all.filter((f) => f.id === sel) : all;
     const baseR = Math.min(s.w - L, s.h - B) * 0.42;
     const t = fitTarget(segs.length ? segs : all, s.w, s.h, L, B, baseR);

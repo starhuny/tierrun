@@ -1,12 +1,61 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { loadCities, searchCities } from './cities.js';
 import { findAirport } from './airports.js';
-import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid } from './core.js';
+import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid, addDays } from './core.js';
 import {
   AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents,
 } from './accor.js';
 import { Icon, AirlineMark, Bar, Seg, NumInput, WonInput, DateInput, AirportInput, Ring, CardFace } from './ui.jsx';
 
 const city = (c) => findAirport(c)?.city || c || '';
+// 숙박 위치 이름 (새 형식: 도시 / 예전 형식: 공항 코드)
+export const stayPlace = (s) => s.cityName || city(s.city);
+
+// 세계 도시 검색 입력
+function CityInput({ value, onPick }) {
+  const [list, setList] = useState(null);
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const ref = useRef(null);
+  useEffect(() => { loadCities().then(setList); }, []);
+  useEffect(() => {
+    const h = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    document.addEventListener('pointerdown', h);
+    return () => document.removeEventListener('pointerdown', h);
+  }, []);
+  const results = useMemo(() => searchCities(list, q, 8), [list, q]);
+  const pick = (c) => { onPick(c); setQ(''); setOpen(false); };
+  return (
+    <label className="field ap-pick" ref={ref}>
+      <span>도시 <span className="faint">(지도에 핀으로 표시)</span></span>
+      <input
+        className="input"
+        placeholder={list ? '도시 이름 (한글·영문)' : '도시 목록 불러오는 중…'}
+        value={open ? q : value || ''}
+        onFocus={() => { setOpen(true); setQ(''); setHi(0); }}
+        onChange={(e) => { setQ(e.target.value); setHi(0); setOpen(true); }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') setHi((h) => Math.min(h + 1, results.length - 1));
+          else if (e.key === 'ArrowUp') setHi((h) => Math.max(h - 1, 0));
+          else if (e.key === 'Enter') { e.preventDefault(); if (results[hi]) pick(results[hi]); }
+          else if (e.key === 'Escape') setOpen(false);
+        }}
+      />
+      {open && results.length > 0 && (
+        <div className="ap-menu" role="listbox">
+          {results.map((c, i) => (
+            <button type="button" key={`${c.en}${c.cc}${c.lat}`} className={i === hi ? 'hi' : ''} onPointerDown={(e) => e.preventDefault()} onClick={() => pick(c)}>
+              <b>{c.cc}</b>
+              <span>{c.ko}</span>
+              <small>{c.en}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </label>
+  );
+}
 const thisYear = (today) => +today.slice(0, 4);
 
 /* ───────── 카드 ───────── */
@@ -156,7 +205,7 @@ export function StayRow({ s, ctx, onClick }) {
         </div>
         <div className="ftitle">{s.hotel || '호텔'}</div>
         <div className="ftimes num">
-          <span>{city(s.city)}{s.city ? ` ${s.city}` : ''}</span>
+          <span>{stayPlace(s)}</span>
           <span>{fmtDate(s.checkIn, { weekday: false })} → {fmtDate(s.checkOut, { weekday: false })}</span>
         </div>
         <div className="fchips num">
@@ -206,9 +255,9 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
               ))}
             </select>
           </label>
-          <AirportInput label="도시 (가까운 공항으로 골라도 돼요 · 지도에 핀)" value={s.city} onChange={(v) => set({ city: v })} />
+          <CityInput value={stayPlace(s)} onPick={(c) => set({ cityName: c.ko, cityEn: c.en, cc: c.cc, lat: c.lat, lon: c.lon, city: '' })} />
           <div className="row2">
-            <label className="field"><span>체크인</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: s.checkOut && s.checkOut > v ? s.checkOut : '' })} invalid={tried && !s.checkIn} /></label>
+            <label className="field"><span>체크인</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: v && !(s.checkOut > v) ? addDays(v, 1) : s.checkOut })} invalid={tried && !s.checkIn} /></label>
             <label className="field"><span>체크아웃</span><DateInput value={s.checkOut} onChange={(v) => set({ checkOut: v })} invalid={tried && !(s.checkOut > s.checkIn)} /></label>
           </div>
           {tried && !(s.checkIn && s.checkOut > s.checkIn) && <div className="err-t">체크인·체크아웃 날짜를 넣어 주세요.</div>}

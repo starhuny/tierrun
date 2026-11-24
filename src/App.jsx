@@ -14,7 +14,7 @@ import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './W
 import { AccorAddView, AccorView, StayForm } from './Accor.jsx';
 import { dailyFx, cachedFx, effectiveEur } from './fx.js';
 import { DEFAULT_EUR } from './accor.js';
-import { walletOf, progEntry, hasProgram } from './wallet.js';
+import { walletOf, progEntry, hasProgram, allianceOf } from './wallet.js';
 import { flightSP } from './alaska.js';
 
 // 초대 링크(?f=토큰)로 들어오면 로그인 전까지 기억해 두고 주소에서는 지움
@@ -757,6 +757,8 @@ export default function App() {
   );
 
   const showGlobe = !mobile || onMap;
+  // 지도도 고른 얼라이언스 칩대로 (호텔 칩이면 숙박 핀만)
+  const mapFlights = alliance === 'ALL' ? flights : alliance === 'HOTEL' ? [] : flights.filter((f) => allianceOf(f) === alliance);
   // 친구 화면을 보고 있으면 지도에 친구의 다가오는 항공편을 그림
   const frOnMap = view?.name === 'friend' ? friends.find((x) => x.uid === view.uid) : null;
   const frFlights = frOnMap ? (frOnMap.upcoming || []).filter((u) => u.date >= today).map((u, i) => ({ ...u, id: `fr-${i}` })) : null;
@@ -765,14 +767,14 @@ export default function App() {
       {showGlobe && (
         <div className="map-layer" id="map">
           <Globe
-            flights={frFlights || flights}
-            pins={frFlights ? [] : stays.filter((x) => x.city).map((x) => ({ id: `st-${x.id}`, code: x.city }))}
+            flights={frFlights || mapFlights}
+            pins={frFlights || !(alliance === 'ALL' || alliance === 'HOTEL') ? [] : stays.filter((x) => x.lat != null || x.city).map((x) => (x.lat != null ? { id: `st-${x.id}`, lat: x.lat, lon: x.lon, label: x.cityName } : { id: `st-${x.id}`, code: x.city }))}
             selectedId={frFlights ? null : sel}
             onSelect={(id) => (frFlights ? null : mobile ? setSel(id) : open(id))}
             insetLeft={mobile ? 0 : panelW + 32}
             insetBottom={mobile ? 170 : 0}
             today={today}
-            fitKey={frOnMap ? `fr:${frOnMap.uid}` : flights.length + stays.length * 1000}
+            fitKey={frOnMap ? `fr:${frOnMap.uid}` : `${alliance}:${mapFlights.length}:${stays.length}`}
           />
           {frOnMap && (
             <div className="map-who" style={{ left: mobile ? 16 : panelW + 48 }}>
