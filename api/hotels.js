@@ -64,7 +64,7 @@ async function main(req, res) {
   // 한국은 한글 이름 그대로, 그 밖은 영어 이름 우선
   const lang = cc === 'KR' ? '' : 'en';
   const qs = [...QUERIES, ...(LOCAL[cc] || [])];
-  // 공개 서버라 한 번에 몰아 보내지 않고 4개씩, 실패한 건 한 번 더
+  // 공개 서버라 한 번에 몰아 보내지 않고 8개씩, 실패한 건 한 번 더
   const t0 = Date.now();
   const results = new Array(qs.length);
   const run = async (i) => {
@@ -72,12 +72,12 @@ async function main(req, res) {
       try { results[i] = { status: 'fulfilled', value: await photon(qs[i], bbox, lang) }; return; } catch (e) {
         results[i] = { status: 'rejected', reason: e };
         if (Date.now() - t0 > 6000) return;
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
   };
   let next = 0;
-  await Promise.all(Array.from({ length: 4 }, async () => { while (next < qs.length && Date.now() - t0 < 7000) await run(next++); }));
+  await Promise.all(Array.from({ length: 8 }, async () => { while (next < qs.length && Date.now() - t0 < 7000) await run(next++); }));
   const ok = results.filter((r) => r?.status === 'fulfilled');
   const failed = qs.filter((_, i) => results[i]?.status !== 'fulfilled');
   if (!ok.length) {
