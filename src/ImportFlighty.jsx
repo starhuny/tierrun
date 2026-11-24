@@ -4,6 +4,7 @@ import { earnedMiles, fmtDate, fmtNum, fmtDot, baselineDate, BASE_KEYS } from '.
 import { TIER } from './skypass.js';
 import { findAirport } from './airports.js';
 import { Icon, AirlineMark } from './ui.jsx';
+import { flightSP } from './alaska.js';
 
 const STEPS = [
   ['Flighty 앱 열기', <>아래 탭에서 <b>Passport</b>를 누르고, 오른쪽 위 <b>프로필 사진</b>을 눌러요.</>],
@@ -11,7 +12,7 @@ const STEPS = [
   ['내보내기 요청', <><b>Export Your Flights</b>를 누르고 이메일을 넣은 다음 <b>Continue</b>를 눌러요. 몇 분 안에 메일이 와요.</>],
   ['CSV 파일 저장', <>메일의 <b>FlightyExport-날짜.csv</b> 첨부파일을 길게 눌러 <b>‘파일’에 저장</b>해요. 컴퓨터라면 그냥 내려받으면 돼요.</>],
   ['여기서 파일 고르기', <>아래 <b>CSV 파일 고르기</b>를 눌러 방금 저장한 파일을 선택해요. 파일은 이 기기 안에서만 읽고 어디에도 올리지 않아요.</>],
-  ['확인하고 추가', <>대한항공·스카이팀·아시아나 항공편만 골라서 보여줘요. 넣을 항공편을 확인하고 <b>추가</b>를 누르면 끝이에요.</>],
+  ['확인하고 추가', <>대한항공·스카이팀·아시아나 항공편(지갑에 알래스카가 있으면 원월드 항공편도)만 골라서 보여줘요. 넣을 항공편을 확인하고 <b>추가</b>를 누르면 끝이에요.</>],
 ];
 
 const BASE_LABEL = {
@@ -60,7 +61,8 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
   const [err, setErr] = useState('');
   const [fname, setFname] = useState('');
   const [picked, setPicked] = useState(() => new Set());
-  const [groups, setGroups] = useState({ KE: true, ST: true, OZ: true });
+  const withOW = !!ctx.asProg;
+  const [groups, setGroups] = useState({ KE: true, ST: true, OZ: true, OW: true });
   const [showDup, setShowDup] = useState(false);
   const bd = baselineDate(profile);
 
@@ -70,10 +72,10 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
     setFname(file.name);
     try {
       const text = await file.text();
-      const r = readFlighty(text, flights);
+      const r = readFlighty(text, flights, { withOW });
       setRes(r);
       setPicked(new Set(r.rows.filter((x) => !x.dup).map((x) => x.key)));
-      if (!r.rows.length) setErr('대한항공·스카이팀·아시아나 항공편이 없어요.');
+      if (!r.rows.length) setErr(withOW ? '대한항공·스카이팀·아시아나·원월드 항공편이 없어요.' : '대한항공·스카이팀·아시아나 항공편이 없어요.');
     } catch (e) {
       setRes(null);
       setErr(e.message || '파일을 읽지 못했어요.');
@@ -85,6 +87,7 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
   const dups = shownAll.filter((x) => x.dup); // 이미 앱에 있는 항공편 (기종만 반영)
   const chosen = shown.filter((x) => picked.has(x.key));
   const totalMi = chosen.reduce((a, x) => a + earnedMiles(x.flight), 0);
+  const totalSP = chosen.reduce((a, x) => a + (x.flight.program === 'AS' ? flightSP(x.flight, ctx.asProg).sp : 0), 0);
   const count = (g) => res?.rows.filter((x) => x.group === g).length || 0;
   const toggle = (k) => setPicked((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const setAll = (on) => setPicked((s) => { const n = new Set(s); shown.forEach((x) => (on ? n.add(x.key) : n.delete(x.key))); return n; });
@@ -145,14 +148,14 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
             <div className="card">
               <div className="card-h"><span>전체 {fmtNum(res.total)}편 중 {fmtNum(res.rows.length)}편을 찾았어요</span></div>
               <div className="imp-groups">
-                {['KE', 'ST', 'OZ'].map((g) => (
+                {(withOW ? ['KE', 'ST', 'OZ', 'OW'] : ['KE', 'ST', 'OZ']).map((g) => (
                   <button key={g} className={`imp-g ${groups[g] ? 'on' : ''}`} onClick={() => setGroups((s) => ({ ...s, [g]: !s[g] }))} aria-pressed={groups[g]}>
                     <span className="ck">{groups[g] && <Icon name="check" size={12} stroke={3} />}</span>{GROUP_LABEL[g]} <b className="num">{count(g)}</b>
                   </button>
                 ))}
               </div>
               <p className="help" style={{ margin: '10px 0 0' }}>
-                그 외 항공사 {fmtNum(res.skipped.other)}편{res.skipped.canceled ? `, 결항 ${res.skipped.canceled}편` : ''}은 뺐어요.
+                그 외 항공사 {fmtNum(res.skipped.other)}편{res.skipped.canceled ? `, 결항 ${res.skipped.canceled}편` : ''}은 뺐어요.{withOW ? ' 원월드 항공편은 알래스카 상태포인트로 들어가요.' : ' 원월드 항공편도 가져오려면 지갑에 알래스카 티어를 먼저 추가해 주세요.'}
               </p>
             </div>
             <BaseCheck profile={profile} onSettings={onSettings} />
@@ -205,7 +208,7 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
                       <span className="t">{findAirport(f.from)?.city || f.from} → {findAirport(f.to)?.city || f.to}</span>
                       <span className="s num">{f.airline} {f.flightNo} · {fmtDate(f.date, { weekday: false })}{f.aircraft ? ` · ${f.aircraft}` : ''}</span>
                     </span>
-                    <span className="mi num">{f.baseMiles != null ? `+${fmtNum(earnedMiles(f))}` : '–'}</span>
+                    <span className="mi num">{f.program === 'AS' ? `+${fmtNum(flightSP(f, ctx.asProg).sp)} SP` : f.baseMiles != null ? `+${fmtNum(earnedMiles(f))}` : '–'}</span>
                   </label>
                 );
               })}
@@ -214,7 +217,7 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
           {shown.length === 0 && <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>새로 추가할 항공편은 없어요. 모두 앱에 이미 있는 항공편이에요.</p>}
           <div className="sumbar">
             <div className="line num">
-              <span>새로 <b>{chosen.length}편</b> · 적립률 100% 기준 <b>{fmtNum(totalMi)}마일</b></span>
+              <span>새로 <b>{chosen.length}편</b>{totalMi > 0 || !totalSP ? <> · 적립률 100% 기준 <b>{fmtNum(totalMi)}마일</b></> : null}{totalSP ? <> · 알래스카 <b>{fmtNum(totalSP)} SP</b></> : null}</span>
               {patches.length > 0 && <span>기존 <b>{patches.length}편</b> 기종만 반영</span>}
             </div>
             {beforeBase > 0 && <div className="help" style={{ color: 'var(--warn)', margin: 0 }}>{beforeBase}편은 설정의 실적 숫자와 겹쳐 실적에 더하지 않아요.</div>}

@@ -1,5 +1,6 @@
 // Flighty 앱에서 내보낸 CSV(FlightyExport-YYYY-MM-DD.csv) 읽기
 // 대한항공·스카이팀·아시아나 항공편만 골라 티어런 항공편으로 바꿈 (적립률은 모두 100%)
+// 지갑에 알래스카가 있으면 원월드 항공편도 골라 알래스카 적립으로 넣음
 import { baseMilesFor, defaultCredit, uid } from './core.js';
 import { normAircraft, isKnownAircraft } from './aircraft.js';
 
@@ -11,7 +12,12 @@ export const ICAO_TO_IATA = {
   DAL: 'DL', AFR: 'AF', KLM: 'KL', VIR: 'VS', SAS: 'SK', HVN: 'VN', CAL: 'CI', CES: 'MU', CXA: 'MF',
   GIA: 'GA', AMX: 'AM', ARG: 'AR', AEA: 'UX', KQA: 'KQ', MEA: 'ME', SVA: 'SV', ROT: 'RO',
 };
-export const GROUP_LABEL = { KE: '대한항공', ST: '스카이팀', OZ: '아시아나' };
+// 원월드 (알래스카 적립)
+export const OW_ICAO = {
+  ASA: 'AS', HAL: 'HA', AAL: 'AA', BAW: 'BA', CPA: 'CX', JAL: 'JL', QFA: 'QF', QTR: 'QR', FIN: 'AY',
+  IBE: 'IB', MAS: 'MH', RJA: 'RJ', ALK: 'UL', RAM: 'AT', FJI: 'FJ', OMA: 'WY',
+};
+export const GROUP_LABEL = { KE: '대한항공', ST: '스카이팀', OZ: '아시아나', OW: '원월드 (알래스카)' };
 const CABIN_MAP = { ECONOMY: 'Y', PREMIUM_ECONOMY: 'W', BUSINESS: 'C', FIRST: 'F' };
 
 // 따옴표 안 줄바꿈·쉼표까지 처리하는 CSV 파서
@@ -45,7 +51,7 @@ const part = (s) => {
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 // → { rows: [{ key, group, flight, dup }], total, skipped: { other, canceled } } | throws
-export function readFlighty(text, existing = []) {
+export function readFlighty(text, existing = [], { withOW = false } = {}) {
   const rows = parseCSV(text);
   if (rows.length < 2) throw new Error('CSV에 항공편이 없어요.');
   const head = rows[0].map((h) => h.trim());
@@ -62,7 +68,8 @@ export function readFlighty(text, existing = []) {
   let other = 0, canceled = 0;
   for (const r of rows.slice(1)) {
     const icao = (r[C.airline] || '').trim().toUpperCase();
-    const code = ICAO_TO_IATA[icao] || (icao.length === 2 && ['KE', 'OZ'].includes(icao) ? icao : null);
+    const ow = withOW ? OW_ICAO[icao] || (icao.length === 2 && Object.values(OW_ICAO).includes(icao) ? icao : null) : null;
+    const code = ICAO_TO_IATA[icao] || (icao.length === 2 && ['KE', 'OZ'].includes(icao) ? icao : null) || ow;
     if (!code) { other++; continue; }
     if (C.canceled >= 0 && String(r[C.canceled]).trim().toLowerCase() === 'true') { canceled++; continue; }
     const date = (r[C.date] || '').trim();
@@ -78,10 +85,11 @@ export function readFlighty(text, existing = []) {
       dep: d?.time || '', arr: a?.time || '', arrOffset: d && a ? Math.max(-1, Math.min(2, dayDiff(d.date, a.date))) : 0,
       from, to, cls: '', cabin: CABIN_MAP[(r[C.cabin] || '').trim()] || 'Y', rate: 100,
       baseMiles: b.miles ?? null, baseSource: b.source ?? null, milesOverride: null,
-      credit: defaultCredit(code), price: null, note: '', importedFrom: 'flighty',
+      credit: ow ? 'NONE' : defaultCredit(code), price: null, note: '', importedFrom: 'flighty',
+      ...(ow ? { program: 'AS', usd: null, award: false, awardPts: null, asCat: '' } : {}),
       aircraft: C.aircraft >= 0 ? normAircraft(r[C.aircraft]) : '', reg: C.reg >= 0 ? String(r[C.reg] || '').trim().toUpperCase() : '',
     };
-    const group = code === 'KE' ? 'KE' : code === 'OZ' ? 'OZ' : 'ST';
+    const group = ow ? 'OW' : code === 'KE' ? 'KE' : code === 'OZ' ? 'OZ' : 'ST';
     const old = have.get(`${code}|${flightNo}|${date}`);
     // 이미 있는 항공편: 적립률·운임·좌석 등급 등은 그대로 두고 기종(·비어 있으면 기체 번호)만 Flighty 값으로
     let patch = null;

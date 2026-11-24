@@ -10,6 +10,10 @@ import Globe from './Globe.jsx';
 import { FriendsSection, FriendFace } from './Friends.jsx';
 import { AircraftStrip } from './Aircraft.jsx';
 import { friendNames } from './social.js';
+import { walletOf, PROGRAMS, allianceOf } from './wallet.js';
+import { ALLIANCES } from './skypass.js';
+import { flightSP, spFor, METHOD, METHODS, methodFor, asCategory, CAT, isOwn, asSummary } from './alaska.js';
+import { AsStrip } from './Wallet.jsx';
 
 export const city = (c) => findAirport(c)?.city || c || '?';
 export const routeTitle = (f) => `${city(f.from)} → ${city(f.to)}`;
@@ -53,7 +57,12 @@ export function FlightRow({ f, ctx, selected, onClick, pick }) {
           <span>{f.to} {f.arr && <b>{f.arr}{+f.arrOffset ? <sup> +{f.arrOffset}</sup> : null}</b>}</span>
         </div>
         <div className="fchips num">
-          {f.credit === 'NONE' ? <span className="badge gray">스카이패스 미반영</span> : <span className="chip"><b>+{fmtNum(e)}</b>마일</span>}
+          {f.program === 'AS' ? (
+            <>
+              <span className="chip"><b>+{fmtNum(flightSP(f, ctx.asProg).sp)}</b>SP</span>
+              <span className="badge cr-AS">알래스카</span>
+            </>
+          ) : f.credit === 'NONE' ? <span className="badge gray">스카이패스 미반영</span> : <span className="chip"><b>+{fmtNum(e)}</b>마일</span>}
           {p > 0 && <span className="chip"><b>+{p}</b>P</span>}
           {c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
           <CabinBadge f={f} />
@@ -249,21 +258,63 @@ export function TierStrip({ goals, profile, onClick }) {
   );
 }
 
+/* ───────── 맨 위 띠: 지갑 순서대로 옆으로 넘기기 ───────── */
+export function TierCarousel({ ctx, goals, alliance, onProgram, onAddProgram }) {
+  const ref = useRef(null);
+  const [at, setAt] = useState(0);
+  const all = walletOf(ctx.profile);
+  const list = alliance === 'ALL' ? all : all.filter((w) => PROGRAMS[w.program]?.alliance === alliance);
+  const slides = list.map((w) =>
+    w.program === 'KE' ? <TierStrip key="KE" goals={goals} profile={ctx.profile} onClick={() => onProgram('KE')} />
+      : w.program === 'AS' ? <AsStrip key="AS" prog={w} ctx={ctx} onClick={() => onProgram('AS')} /> : null,
+  ).filter(Boolean);
+  if (!slides.length) {
+    slides.push(
+      alliance === 'OW' ? (
+        <button key="addAS" className="strip add" onClick={() => onAddProgram('AS')}>
+          <div><div className="t">원월드</div><div className="v" style={{ fontSize: 16 }}>알래스카 티어를 지갑에 추가해 보세요</div></div>
+          <Icon name="plus" size={20} />
+        </button>
+      ) : (
+        <div key="soon" className="strip add">
+          <div><div className="t">스타얼라이언스</div><div className="v" style={{ fontSize: 16 }}>터키항공 Miles&Smiles는 준비 중이에요</div></div>
+        </div>
+      ),
+    );
+  }
+  const onScroll = () => {
+    const el = ref.current;
+    if (el) setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+  };
+  return (
+    <div className="tstrip-wrap">
+      <div className="tstrip" ref={ref} onScroll={onScroll}>
+        {slides.map((x, i) => <div className="tslide" key={i}>{x}</div>)}
+      </div>
+      {slides.length > 1 && (
+        <div className="tdots" aria-hidden="true">{slides.map((_, i) => <i key={i} className={i === Math.min(at, slides.length - 1) ? 'on' : ''} />)}</div>
+      )}
+    </div>
+  );
+}
+
+const CHIPS = [['ALL', '전체'], ...ALLIANCES.map((a) => [a.id, a.short || a.name])];
+
 /* ───────── 항공편 목록 ───────── */
-export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onTier, onAircraft, picking, setPicking, onGroup, head, banner }) {
+export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onProgram, onAddProgram, alliance = 'ALL', setAlliance, onAircraft, picking, setPicking, onGroup, head, banner }) {
   const { flights, today } = ctx;
   const [showPast, setShowPast] = useState(false);
   const [openId, setOpenId] = useState(null);
   const swipe = { open: openId, setOpen: setOpenId };
   const pickOne = (id) => setPicking((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const sorted = useMemo(() => sortFlights(flights), [flights]);
+  const sorted = useMemo(() => sortFlights(alliance === 'ALL' ? flights : flights.filter((f) => allianceOf(f) === alliance)), [flights, alliance]);
   const upcoming = sorted.filter((f) => f.date >= today);
   const past = sorted.filter((f) => f.date < today).reverse();
   return (
     <>
       {head}
       {banner}
-      <TierStrip goals={goals} profile={ctx.profile} onClick={onTier} />
+      <TierCarousel ctx={ctx} goals={goals} alliance={alliance} onProgram={onProgram} onAddProgram={onAddProgram} />
       {flights.length > 0 && onAircraft && <AircraftStrip flights={flights} today={today} onClick={onAircraft} />}
       {!flights.length ? (
         <div className="empty fade-in">
@@ -281,20 +332,27 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
         </div>
       ) : (
         <>
-          {setPicking && flights.length > 1 && (
-            <div className="pick-head">
-              {picking ? (
-                <>
-                  <span><b>여정으로 묶을 항공편</b>을 고르세요</span>
-                  <button className="link" onClick={() => setPicking(null)}>취소</button>
-                </>
-              ) : (
-                <button className="btn sm sky" onClick={() => { setPicking(new Set()); setShowPast(true); }}><Icon name="list" size={15} />골라서 여정으로 묶기</button>
-              )}
-            </div>
-          )}
+          <div className="pick-head">
+            {picking ? (
+              <>
+                <span><b>여정으로 묶을 항공편</b>을 고르세요</span>
+                <button className="link" onClick={() => setPicking(null)}>취소</button>
+              </>
+            ) : (
+              <>
+                {setPicking && flights.length > 1 && <button className="btn sm sky" onClick={() => { setPicking(new Set()); setShowPast(true); }}><Icon name="list" size={15} />{setAlliance ? '여정으로 묶기' : '골라서 여정으로 묶기'}</button>}
+                {setAlliance && (
+                  <div className="achips" role="tablist" aria-label="얼라이언스">
+                    {CHIPS.map(([id, label]) => (
+                      <button key={id} role="tab" aria-selected={alliance === id} className={alliance === id ? 'on' : ''} onClick={() => setAlliance(id)}>{label}</button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{upcoming.length}편</span></div>
-          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} picking={picking} onPick={pickOne} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>예정된 항공편이 없어요.</p>}
+          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} picking={picking} onPick={pickOne} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>{alliance === 'ALL' ? '예정된 항공편이 없어요.' : `예정된 ${CHIPS.find((c) => c[0] === alliance)?.[1]} 항공편이 없어요.`}</p>}
           {past.length > 0 && (
             <>
               <div className="section-h"><span>지난 항공편</span><span className="faint num">{past.length}편</span></div>
@@ -333,6 +391,55 @@ function PickBar({ flights, picking, setPicking, onGroup }) {
       )}
       <button className="btn primary block" disabled={chosen.length < 2} onClick={onGroup}>{chosen.length < 2 ? '2편 이상 골라 주세요' : `${chosen.length}편을 여정으로 묶기`}</button>
     </div>
+  );
+}
+
+/* ───────── 알래스카 적립 카드 (항공편 상세) ───────── */
+function AsEarnCard({ f, ctx }) {
+  const prog = ctx.asProg;
+  const m = methodFor(prog, f.date);
+  const r = spFor(f, m);
+  const yr = +f.date.slice(0, 4);
+  const s = prog ? asSummary(prog, ctx.flights, ctx.today, yr) : null;
+  const cat = asCategory(f);
+  const past = f.date < ctx.today;
+  return (
+    <>
+      <div className="card">
+        <div className="card-h"><span>알래스카 상태포인트</span><span className="badge cr-AS">{METHOD[m].name}{yr < 2027 ? ' (2026년)' : ''}</span></div>
+        <div className="calc num">
+          <span className="muted">계산</span><b style={{ fontSize: 14 }}>{r.why}</b>
+          {!isOwn(f.airline) && !f.award && <><span className="muted">좌석 구분 {cat.how === 'table' ? `(${f.cls} 클래스 표)` : cat.how === 'guess' ? '(예약 클래스 미입력)' : ''}</span><b style={{ fontSize: 14 }}>{CAT[cat.cat].name}</b></>}
+          <div className="eq">
+            <span className="muted">{past ? '적립' : '적립 예정'}</span>
+            <b>{fmtNum(r.sp)}<small style={{ fontSize: 14, marginLeft: 3 }}>SP</small></b>
+          </div>
+        </div>
+        {r.est && <div className="notice" style={{ marginTop: 10 }}>{f.award ? '마일 항공권은 사용한 포인트를 넣으면 달러 기준 적립을 계산해요.' : isOwn(f.airline) ? '알래스카·하와이안 편은 세금을 뺀 운임(USD)을 넣으면 정확해져요.' : '예약 클래스를 넣으면 좌석 구분을 정확히 판정해요.'}</div>}
+        {!prog && <div className="notice" style={{ marginTop: 10 }}>알래스카 티어가 지갑에 없어요. 지갑에서 추가하면 등급 진행률에 들어가요.</div>}
+      </div>
+      <div className="card">
+        <div className="card-h"><span>방식별로 계산하면</span>{yr < 2027 && <span className="faint">2026년은 거리 기준</span>}</div>
+        <div className="mini3 num">
+          {METHODS.map((x) => {
+            const v = spFor(f, x.id);
+            return <div key={x.id} className={x.id === m ? 'on' : ''}><span>{x.short}</span><b>{fmtNum(v.sp)}{v.est ? '*' : ''}</b></div>;
+          })}
+        </div>
+      </div>
+      {s && s.next && (
+        <div className="card">
+          <div className="card-h"><span>{yr}년 {s.goal}까지 기여</span><span className="faint">{past ? '확정' : '예정'}</span></div>
+          <div className="contrib num">
+            <div className="row">
+              <span>+{fmtNum(r.sp)} SP</span>
+              <b>{((r.sp / s.next.sp) * 100).toFixed(1)}%</b>
+              <Bar conf={past ? r.sp / s.next.sp : 0} plan={past ? 0 : r.sp / s.next.sp} thin />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -399,6 +506,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
         </div>
       )}
       <div className="pad" style={{ marginTop: 14 }}>
+        {f.program === 'AS' ? <AsEarnCard f={f} ctx={ctx} /> : (
         <div className="card">
           <div className="card-h"><span>스카이패스 적립</span><span className={`badge ${f.credit === 'ST' || f.credit === 'OT' ? `cr-${f.credit}` : 'gray'}`}>{CREDIT[f.credit]?.label}</span></div>
           {f.credit === 'NONE' ? (
@@ -417,6 +525,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
             </div>
           )}
         </div>
+        )}
 
         {!contrib.excluded && contrib.rows.length > 0 && (
           <div className="card">

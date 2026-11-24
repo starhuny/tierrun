@@ -5,6 +5,7 @@ import { findAirport } from './airports.js';
 import { Icon, AirlineMark, Bar } from './ui.jsx';
 import { inviteLink, flightKey } from './social.js';
 import { aircraftTop } from './aircraft.js';
+import { AS_TIER } from './alaska.js';
 
 const city = (c) => findAirport(c)?.city || c || '?';
 
@@ -35,6 +36,9 @@ export function FriendRow({ fr, ctx, onClick, right }) {
           <span className="fr-top">
             <b>{fr.name || '이름 없음'}</b>
             <span className="tier-chip" style={{ background: t.bg, color: t.ink }}>{t.name}</span>
+            {(fr.wallet || []).filter((w) => w.program === 'AS' && AS_TIER[w.tier]).map((w) => (
+              <span key="AS" className="tier-chip" style={{ background: AS_TIER[w.tier].bg, color: AS_TIER[w.tier].ink }}>알래스카 {AS_TIER[w.tier].name}</span>
+            ))}
           </span>
           {fr.missing ? (
             <span className="fr-sub">아직 티어런 정보가 올라오지 않았어요</span>
@@ -227,6 +231,23 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
           ) : (
             <p className="muted" style={{ margin: '12px 20px' }}>최고 등급이라 다음 목표가 없어요.</p>
           )}
+          {(fr.wallet || []).filter((w) => w.program === 'AS' && AS_TIER[w.tier]).map((w) => {
+            const at = AS_TIER[w.tier];
+            const nt = w.next ? AS_TIER[w.next] : null;
+            const tgt = w.nextSp || 1;
+            return (
+              <div key="AS" className="pad" style={{ marginTop: 10 }}>
+                <div className="card">
+                  <div className="card-h">
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="AS" size="xs" />알래스카 Atmos</span>
+                    <span className="tier-chip" style={{ background: at.bg, color: at.ink }}>{at.name}{at.ow ? ` · ${at.ow}` : ''}</span>
+                  </div>
+                  <Bar conf={nt ? Math.min(1, w.sp / tgt) : 1} plan={nt ? Math.min(1, w.all / tgt) - Math.min(1, w.sp / tgt) : 0} done={!nt} />
+                  <div className="help num" style={{ marginTop: 8 }}>{w.year}년 {fmtNum(w.sp)} SP{nt ? ` · ${nt.name}까지 ${fmtNum(Math.max(0, w.nextSp - w.sp))} SP 남음` : ' · 최고 등급 달성'}{w.all > w.sp ? ` · 예정 포함 ${fmtNum(w.all)} SP` : ''}</div>
+                </div>
+              </div>
+            );
+          })}
           <FlightCompare fr={fr} ctx={ctx} />
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{up.length}편</span></div>
           {up.length === 0 && <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>예정된 항공편이 없어요.</p>}

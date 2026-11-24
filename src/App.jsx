@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initStore, EMPTY_STATE, useLocalGuest } from './store.js';
 import { aiAvailable } from './ai.js';
-import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum, uid, flightCost } from './core.js';
+import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum, uid, flightCost, defaultCredit } from './core.js';
 import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
@@ -10,6 +10,9 @@ import { FriendsView, FriendView } from './Friends.jsx';
 import { AircraftView } from './Aircraft.jsx';
 import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
+import { WalletView, TierAddView, AlaskaView } from './Wallet.jsx';
+import { walletOf, progEntry } from './wallet.js';
+import { flightSP } from './alaska.js';
 
 // 초대 링크(?f=토큰)로 들어오면 로그인 전까지 기억해 두고 주소에서는 지움
 (() => {
@@ -215,7 +218,36 @@ export default function App() {
     say('새 초대 링크를 만들었어요. 예전 링크는 더 이상 열리지 않아요');
   };
 
-  const ctx = { flights, trips, profile, today, user: ad?.user, together, friends };
+  const asProg = progEntry(profile, 'AS');
+  const ctx = { flights, trips, profile, today, user: ad?.user, together, friends, asProg };
+  const [alliance, setAlliance] = useState('ALL');
+  // ── 티어 지갑 ──
+  const setWallet = (fn) => setState((s) => ({ ...s, profile: { ...s.profile, wallet: fn(walletOf(s.profile)) } }));
+  const openProgram = (id) => {
+    if (id === 'KE') { setStack(null); setTab('tier'); scrollRef.current?.scrollTo?.(0, 0); }
+    else setStack({ name: 'program', id });
+  };
+  const saveTier = (entry, { convert = [] } = {}) => {
+    const conv = new Set(convert);
+    const isNew = !progEntry(profile, entry.program);
+    setState((s) => {
+      const w = walletOf(s.profile);
+      const next = w.some((x) => x.program === entry.program) ? w.map((x) => (x.program === entry.program ? entry : x)) : [...w, entry];
+      return { ...s, profile: { ...s.profile, wallet: next }, flights: s.flights.map((f) => (conv.has(f.id) ? { ...f, program: entry.program, credit: 'NONE' } : f)) };
+    });
+    setStack({ name: 'program', id: entry.program });
+    say(isNew ? `지갑에 알래스카 티어를 추가했어요${conv.size ? ` · 원월드 ${conv.size}편을 알래스카로 적립` : ''}` : '저장했어요');
+  };
+  const removeTier = (program) => {
+    setState((s) => ({
+      ...s,
+      profile: { ...s.profile, wallet: walletOf(s.profile).filter((x) => x.program !== program) },
+      flights: s.flights.map((f) => (f.program === program ? { ...f, program: 'KE', credit: defaultCredit(f.airline) } : f)),
+    }));
+    setStack({ name: 'wallet' });
+    say('지갑에서 뺐어요. 해당 항공편은 스카이패스 항공편으로 돌아갔어요');
+  };
+  const patchProg = (program, patch) => setWallet((w) => w.map((x) => (x.program === program ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x)));
 
   const open = (id) => {
     setSel(id);
@@ -249,7 +281,9 @@ export default function App() {
       return { ...s, flights: flights2, trips: tidyTrips(flights2, { ...s.trips, [trip.id]: trip }) };
     });
     const first = sortFlights(fl)[0];
-    say(`${fl.length}개 구간 저장 · ${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일`);
+    const mi = fl.reduce((a, f) => a + earnedMiles(f), 0);
+    const sp = fl.reduce((a, f) => a + (f.program === 'AS' ? flightSP(f, progEntry(profile, 'AS')).sp : 0), 0);
+    say(`${fl.length}개 구간 저장 · ${[mi || !sp ? `${fmtNum(mi)}마일` : '', sp ? `${fmtNum(sp)} SP` : ''].filter(Boolean).join(' · ')}`);
     setPicking(null);
     if (first) open(first.id);
     else close();
@@ -299,7 +333,11 @@ export default function App() {
     setTab('flights');
     say(
       [
-        fl.length ? `새 항공편 ${fl.length}편을 추가했어요 (${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일)` : '',
+        fl.length ? `새 항공편 ${fl.length}편을 추가했어요 (${(() => {
+          const mi = fl.reduce((a, f) => a + earnedMiles(f), 0);
+          const sp = fl.reduce((a, f) => a + (f.program === 'AS' ? flightSP(f, progEntry(profile, 'AS')).sp : 0), 0);
+          return [mi || !sp ? `${fmtNum(mi)}마일` : '', sp ? `${fmtNum(sp)} SP` : ''].filter(Boolean).join(' · ');
+        })()})` : '',
         dupCount ? `이미 있던 ${dupCount}편은 적립률은 그대로 두고 기종만 반영했어요` : '',
       ].filter(Boolean).join(' · ') || '바뀐 내용이 없어요',
       null,
@@ -406,7 +444,7 @@ export default function App() {
   const panelW = Math.min(420, Math.max(340, vw * 0.31));
   const onMap = mobile && tab === 'map' && !view;
   const selFlight = (sel && flights.find((f) => f.id === sel)) || sortFlights(flights).find((f) => f.date >= today) || sortFlights(flights).at(-1) || null;
-  const avatar = <Avatar user={ad?.user} name={profile?.name} onClick={() => setStack({ name: 'settings' })} />;
+  const avatar = <Avatar user={ad?.user} name={profile?.name} onClick={() => setStack({ name: 'wallet' })} />;
   const banner =
     profile?.sample ? (
       <div className="banner"><Icon name="info" size={16} />예시 데이터를 보고 있어요.<button className="link" style={{ marginLeft: 'auto' }} onClick={clearSample}>지우고 시작</button></div>
@@ -457,6 +495,44 @@ export default function App() {
         }}
       />
     );
+  } else if (view?.name === 'wallet') {
+    content = (
+      <WalletView
+        ctx={ctx}
+        goals={goals}
+        user={ad?.user}
+        onOpen={openProgram}
+        onAdd={(id) => setStack({ name: 'tieradd', program: id })}
+        onSettings={() => setStack({ name: 'settings' })}
+        onFriends={social ? () => { loadFriends(true); setStack({ name: 'friends' }); } : null}
+        onReorder={(w) => { setWallet(() => w); say('지갑 순서를 바꿨어요'); }}
+        onClose={() => setStack(null)}
+      />
+    );
+  } else if (view?.name === 'tieradd') {
+    content = (
+      <TierAddView
+        key={view.program}
+        program={view.program}
+        entry={progEntry(profile, view.program)}
+        ctx={ctx}
+        onSave={saveTier}
+        onDelete={() => removeTier(view.program)}
+        onClose={() => setStack(progEntry(profile, view.program) ? { name: 'program', id: view.program } : { name: 'wallet' })}
+      />
+    );
+  } else if (view?.name === 'program' && asProg && view.id === 'AS') {
+    content = (
+      <AlaskaView
+        prog={asProg}
+        ctx={ctx}
+        onBack={() => setStack({ name: 'wallet' })}
+        onEdit={() => setStack({ name: 'tieradd', program: 'AS' })}
+        onSetMethod={(m) => { patchProg('AS', { method: m }); say('적립 방식을 바꿨어요. 2027년 이후 항공편에 적용돼요'); }}
+        onRewards={(yr, sp, ids) => patchProg('AS', (x) => ({ rewards: { ...(x.rewards || {}), [yr]: { ...(x.rewards?.[yr] || {}), [sp]: ids } } }))}
+        onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'program', backId: 'AS' }); }}
+      />
+    );
   } else if (view?.name === 'friends') {
     content = <FriendsView ctx={ctx} social={!!social} err={friendsErr} invite={profile?.invite} onOpen={(uid) => setStack({ name: 'friend', uid })} onRemove={removeFriend} onReset={resetInvite} onRefresh={() => loadFriends(true)} onClose={() => setStack(null)} say={say} />;
   } else if (view?.name === 'friend') {
@@ -476,6 +552,7 @@ export default function App() {
         today={today}
         aiOk={aiOk}
         myFlights={flights}
+        profile={profile}
         onSave={saveTrip}
         onCancel={() => (view.group ? setStack(null) : view.flightId ? open(view.flightId) : setStack(null))}
         onDeleteTrip={() => deleteTrip(view.tripId)}
@@ -484,7 +561,7 @@ export default function App() {
   } else if (view?.name === 'detail') {
     const f = flights.find((x) => x.id === view.id);
     content = f ? (
-      <DetailView key={f.id} f={f} ctx={ctx} mobile={mobile} onClose={view.back ? () => setStack({ name: view.back }) : close} onEdit={() => editTrip(f)} onDelete={deleteFlight} onOpen={open} />
+      <DetailView key={f.id} f={f} ctx={ctx} mobile={mobile} onClose={view.back ? () => setStack({ name: view.back, id: view.backId }) : close} onEdit={() => editTrip(f)} onDelete={deleteFlight} onOpen={open} />
     ) : (
       <div className="empty"><p>항공편을 찾을 수 없어요.</p><button className="btn" onClick={close}>돌아가기</button></div>
     );
@@ -504,10 +581,13 @@ export default function App() {
         onFlighty={() => setStack({ name: 'import' })}
         onAircraft={() => setStack({ name: 'aircraft' })}
         onDelete={swipeDelete}
+        onProgram={openProgram}
+        onAddProgram={(id) => setStack({ name: 'tieradd', program: id })}
+        alliance={alliance}
+        setAlliance={setAlliance}
         picking={picking}
         setPicking={setPicking}
         onGroup={groupPicked}
-        onTier={() => setTab('tier')}
         banner={banner}
         head={<Head title="내 항공편" right={avatar} />}
       />

@@ -2,6 +2,8 @@
 import { sortFlights, cabinOf } from './core.js';
 import { TIER } from './skypass.js';
 import { aircraftTop } from './aircraft.js';
+import { walletOf } from './wallet.js';
+import { asSummary } from './alaska.js';
 
 export const INVITE_PARAM = 'f';
 export const INVITE_KEY = 'tierrun:invite';
@@ -53,6 +55,12 @@ export function buildPublic({ profile, user, flights, goals, today }) {
           done: !!h.done,
         }
       : null,
+    // 지갑의 다른 티어 (지금은 알래스카): 등급과 올해 상태포인트 진행률만
+    wallet: walletOf(profile).filter((w) => w.program !== 'KE').map((w) => {
+      if (w.program !== 'AS') return { program: w.program };
+      const x = asSummary(w, flights, today);
+      return { program: 'AS', tier: x.held.id, year: x.year, sp: x.conf, all: x.all, next: x.next?.id || null, nextSp: x.next?.sp || null };
+    }),
     // 많이 탄 기종 순위(탑승 완료 기준, 횟수만)
     aircraft: aircraftTop(flights, today, 3),
     stats: flightStats(flights, today),

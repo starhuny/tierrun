@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
-import { AIRLINES, AIRLINE, CREDIT, CABINS, CABIN, cabinFromClass } from './skypass.js';
+import { AIRLINES, AIRLINE, CREDIT, CABINS, CABIN, cabinFromClass, AIRLINE_GROUPS } from './skypass.js';
+import { defaultProgram, hasProgram, progEntry } from './wallet.js';
+import { spFor, methodFor, METHODS, METHOD, CATS, CAT, asCategory, isOwn, isOneworld, METHOD_FROM_YEAR } from './alaska.js';
 import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
@@ -10,14 +12,19 @@ import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark, D
 const blank = (o = {}) => ({
   key: uid(), id: null, airline: 'KE', flightNo: '', date: '', dep: '', arr: '', arrOffset: 0, from: '', to: '', cls: '',
   cabin: 'Y', rate: 100, baseMiles: null, baseSource: null, baseTouched: false, milesOverride: null, credit: 'KE', creditTouched: false,
-  price: null, note: '', aircraft: '', reg: '', showBase: false, showOverride: false, ...o,
+  price: null, note: '', aircraft: '', reg: '', showBase: false, showOverride: false,
+  program: 'KE', programTouched: false, usd: null, award: false, awardPts: null, asCat: '', ...o,
 });
 
 // 자동 계산: 구간 마일, 실적 구분, 적립률
-function auto(s, changed) {
+function auto(s, changed, profile) {
   const n = { ...s };
   const code = (n.airline || '').toUpperCase();
   if (changed.includes('airline') && !n.creditTouched) n.credit = defaultCredit(code);
+  // 적립 프로그램: 원월드 항공사 + 지갑에 알래스카가 있으면 알래스카로
+  if (changed.includes('airline') && !n.programTouched) n.program = defaultProgram(code, profile);
+  if (changed.includes('program') && n.program !== 'AS' && !n.creditTouched) n.credit = defaultCredit(code);
+  if (n.program === 'AS') n.credit = 'NONE';
   if ((changed.includes('airline') || changed.includes('from') || changed.includes('to')) && !n.baseTouched) {
     const b = baseMilesFor(code, n.from, n.to);
     if (b.miles != null) {
@@ -33,14 +40,21 @@ function auto(s, changed) {
     if (r != null) n.rate = r;
     if (changed.includes('cls')) n.cabin = cabinFromClass(n.cls) || n.cabin;
   }
+  // 제휴사 예약 클래스 표(알래스카 정리표)에 있으면 좌석 등급도 맞춤
+  if (changed.includes('cls') && code !== 'KE' && n.cls) {
+    const c = asCategory({ airline: code, cls: n.cls });
+    if (c.how === 'table' && c.cat !== 'X') n.cabin = { DY: 'Y', Y: 'Y', W: 'W', C: 'C', F: 'F' }[c.cat];
+  }
   return n;
 }
 
 function fromFlight(f) {
-  return blank({ ...f, cabin: f.cabin || (f.airline === 'KE' && f.cls ? cabinFromClass(f.cls) : 'Y'), key: f.id, showBase: f.baseSource === 'manual', showOverride: f.milesOverride != null, baseTouched: f.baseSource === 'manual' || f.baseSource === 'ai', creditTouched: f.credit !== defaultCredit(f.airline) });
+  return blank({ ...f, program: f.program || 'KE', programTouched: true, cabin: f.cabin || (f.airline === 'KE' && f.cls ? cabinFromClass(f.cls) : 'Y'), key: f.id, showBase: f.baseSource === 'manual', showOverride: f.milesOverride != null, baseTouched: f.baseSource === 'manual' || f.baseSource === 'ai', creditTouched: f.credit !== defaultCredit(f.airline) });
 }
 
-export default function FlightForm({ initial, today, aiOk, myFlights = [], onSave, onCancel, onDeleteTrip, onSplit }) {
+export default function FlightForm({ initial, today, aiOk, myFlights = [], profile, onSave, onCancel, onDeleteTrip, onSplit }) {
+  const A = (x, ch) => auto(x, ch, profile);
+  const asProg = progEntry(profile, 'AS');
   const editing = !!initial;
   const grouping = !!initial?.grouping;
   const [splitAsk, setSplitAsk] = useState(false);
@@ -57,11 +71,11 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
   const setSeg = (i, patch) =>
     setSegs((arr) => {
       const keys = Object.keys(patch);
-      let next = arr.map((s, k) => (k === i ? auto({ ...s, ...patch, mirror: i === 1 && keys.some((x) => ['from', 'to', 'airline'].includes(x)) ? false : s.mirror }, keys) : s));
+      let next = arr.map((s, k) => (k === i ? A({ ...s, ...patch, mirror: i === 1 && keys.some((x) => ['from', 'to', 'airline'].includes(x)) ? false : s.mirror }, keys) : s));
       // 왕복: 가는 편을 고치면 오는 편을 반대로 맞춰 줌 (오는 편을 직접 고치기 전까지)
       if (kind === 'round' && i === 0 && next[1]?.mirror) {
         const a = next[0], b = next[1];
-        next = [a, auto({ ...b, airline: a.airline, from: a.to, to: a.from, cls: a.cls || b.cls, rate: a.rate, credit: a.credit, creditTouched: a.creditTouched, date: b.date || a.date }, ['airline', 'from', 'to', 'cls'])];
+        next = [a, A({ ...b, airline: a.airline, from: a.to, to: a.from, cls: a.cls || b.cls, rate: a.rate, credit: a.credit, creditTouched: a.creditTouched, program: a.program, programTouched: a.programTouched, asCat: a.asCat, award: a.award, date: b.date || a.date }, ['airline', 'from', 'to', 'cls'])];
       }
       return next;
     });
@@ -72,7 +86,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
       if (k === 'oneway') return arr.slice(0, 1);
       if (arr.length >= 2) return k === 'round' ? arr.slice(0, 2) : arr;
       const a = arr[0];
-      const back = auto(blank({ airline: a.airline, from: a.to, to: a.from, date: a.date, cls: a.cls, rate: a.rate, credit: a.credit, creditTouched: a.creditTouched, mirror: true }), ['airline', 'from', 'to', 'cls']);
+      const back = A(blank({ airline: a.airline, from: a.to, to: a.from, date: a.date, cls: a.cls, rate: a.rate, credit: a.credit, creditTouched: a.creditTouched, program: a.program, programTouched: a.programTouched, asCat: a.asCat, award: a.award, mirror: true }), ['airline', 'from', 'to', 'cls']);
       return [a, back];
     });
     if (k !== 'oneway' && priceMode === 'each' && !editing) setPriceMode('total');
@@ -83,7 +97,8 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
     () => segs.map((s) => ({
       id: s.id || s.key, airline: (s.airline || '').toUpperCase(), flightNo: s.flightNo.trim(), date: s.date, dep: s.dep, arr: s.arr, arrOffset: +s.arrOffset || 0,
       from: s.from, to: s.to, cls: (s.cls || '').toUpperCase(), cabin: s.cabin || 'Y', rate: s.rate == null ? 100 : +s.rate, baseMiles: s.baseMiles == null ? 0 : +s.baseMiles,
-      baseSource: s.baseSource || 'manual', milesOverride: s.showOverride && s.milesOverride != null ? +s.milesOverride : null, credit: s.credit,
+      baseSource: s.baseSource || 'manual', milesOverride: s.showOverride && s.milesOverride != null ? +s.milesOverride : null, credit: s.program === 'AS' ? 'NONE' : s.credit,
+      program: s.program === 'AS' ? 'AS' : 'KE', usd: s.usd == null || s.usd === '' ? null : +s.usd, award: !!s.award, awardPts: s.awardPts == null || s.awardPts === '' ? null : +s.awardPts, asCat: s.asCat || '',
       price: priceMode === 'each' ? s.price : null, note: s.note || '',
       aircraft: normAircraft(s.aircraft), reg: String(s.reg || '').trim().toUpperCase(),
     })),
@@ -91,6 +106,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
   );
   const totalMiles = flightsOut.reduce((a, f) => a + earnedMiles(f), 0);
   const totalPts = flightsOut.reduce((a, f) => a + flightPoints(f), 0);
+  const totalSP = flightsOut.reduce((a, f) => a + (f.program === 'AS' ? spFor(f, methodFor(asProg, f.date)).sp : 0), 0);
   const totalCost = priceMode === 'total' ? tripPrice : flightsOut.every((f) => f.price == null) ? null : flightsOut.reduce((a, f) => a + (+f.price || 0), 0);
   const errs = segs.map((s) => ({ from: !s.from, to: !s.to, date: !s.date, airline: !s.airline }));
   const valid = errs.every((e) => !e.from && !e.to && !e.date && !e.airline);
@@ -124,6 +140,8 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
           note: x.note || prev?.note || '',
           aircraft: normAircraft(x.aircraft || prev?.aircraft || ''),
         });
+        if (!s.programTouched) s.program = defaultProgram(code, profile);
+        if (s.program === 'AS') s.credit = 'NONE';
         const b = baseMilesFor(code, s.from, s.to);
         if (b.miles != null) s = { ...s, baseMiles: b.miles, baseSource: b.source, baseTouched: false };
         else if (x.distanceMiles) s = { ...s, baseMiles: Math.round(x.distanceMiles), baseSource: 'ai', baseTouched: true };
@@ -188,6 +206,8 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
             err={tried ? errs[i] : {}}
             showPrice={priceMode === 'each'}
             myFlights={myFlights}
+            profile={profile}
+            asProg={asProg}
             onChange={(p) => setSeg(i, p)}
             onRemove={kind === 'multi' && segs.length > 2 ? () => setSegs((a) => a.filter((_, k) => k !== i)) : null}
           />
@@ -195,7 +215,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
         {kind === 'multi' && (
           <button className="btn ghost" onClick={() => setSegs((a) => {
             const last = a[a.length - 1];
-            return [...a, auto(blank({ airline: last.airline, from: last.to, date: last.date, credit: last.credit, creditTouched: last.creditTouched }), ['airline', 'from'])];
+            return [...a, A(blank({ airline: last.airline, from: last.to, date: last.date, credit: last.credit, creditTouched: last.creditTouched, program: last.program, programTouched: last.programTouched }), ['airline', 'from'])];
           })}><Icon name="plus" size={17} />구간 추가</button>
         )}
 
@@ -235,7 +255,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
       )}
       <div className="sumbar">
         <div className="line num">
-          <span>적립 <b>{fmtNum(totalMiles)}마일</b>{totalPts ? ` · +${totalPts}P` : ''}</span>
+          <span>적립 {totalMiles > 0 || !totalSP ? <b>{fmtNum(totalMiles)}마일</b> : null}{totalPts ? ` · +${totalPts}P` : ''}{totalSP ? <>{totalMiles > 0 ? ' · ' : ''}<b>{fmtNum(totalSP)} SP</b></> : null}</span>
           <span>{totalCost ? <>{fmtWon(totalCost)} · <b>{totalMiles ? fmtWon(totalCost / totalMiles) : '–'}</b>/마일</> : '운임 미입력'}</span>
         </div>
         {tried && !valid && <div className="err-t">출발·도착 공항과 날짜를 모든 구간에 넣어 주세요.</div>}
@@ -245,7 +265,8 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
   );
 }
 
-function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
+function SegCard({ s, i, n, err, showPrice, myFlights, profile, asProg, onChange, onRemove }) {
+  const hasAS = hasProgram(profile, 'AS');
   const known = AIRLINE[s.airline];
   const [custom, setCustom] = useState(!known && !!s.airline);
   const [lk, setLk] = useState(null); // { busy } | { ok, text, source, legs }
@@ -291,7 +312,11 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
             <input className="input" value={s.airline} maxLength={2} placeholder="코드 2자리" onChange={(ev) => onChange({ airline: ev.target.value.toUpperCase() })} onBlur={() => !s.airline && setCustom(false)} />
           ) : (
             <select className="input" value={s.airline} onChange={(ev) => (ev.target.value === '__' ? (setCustom(true), onChange({ airline: '' })) : onChange({ airline: ev.target.value }))}>
-              {AIRLINES.map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}
+              {AIRLINE_GROUPS.map(([g, fn]) => (
+                <optgroup key={g} label={g}>
+                  {AIRLINES.filter(fn).map((a) => <option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}
+                </optgroup>
+              ))}
               <option value="__">직접 입력…</option>
             </select>
           )}
@@ -361,6 +386,14 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
           <input className="input num" value={s.reg || ''} placeholder="예: HL8082" autoCapitalize="characters" onChange={(ev) => onChange({ reg: ev.target.value.toUpperCase().replace(/\s/g, '') })} />
         </label>
       </div>
+      {(hasAS || s.program === 'AS') && (
+        <div className="field">
+          <span>적립 프로그램</span>
+          <Seg small light options={[['KE', '대한항공 스카이패스'], ['AS', '알래스카 Atmos']]} value={s.program || 'KE'} onChange={(v) => onChange({ program: v, programTouched: true })} />
+        </div>
+      )}
+      {!hasAS && s.program !== 'AS' && isOneworld(s.airline) && <div className="help" style={{ marginTop: -4 }}>원월드 항공편이에요. 지갑(오른쪽 위 프로필)에서 알래스카 티어를 추가하면 알래스카 상태포인트로 계산할 수 있어요.</div>}
+      {s.program === 'AS' ? <AsFields s={s} prog={asProg} onChange={onChange} gc={gc} /> : (<>
       <div className="field">
         <span>실적 구분</span>
         <Seg small light options={Object.entries(CREDIT).map(([k, v]) => [k, v.short])} value={s.credit} onChange={(v) => onChange({ credit: v, creditTouched: true })} />
@@ -392,8 +425,63 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
       {s.showOverride && (
         <label className="field"><span>실제 적립 마일 (대한항공 적립 내역 기준)</span><NumInput value={s.milesOverride} suffix="마일" onChange={(v) => onChange({ milesOverride: v })} /></label>
       )}
+      </>)}
       {showPrice && <label className="field"><span>운임</span><WonInput value={s.price} onChange={(v) => onChange({ price: v })} /></label>}
     </div>
+  );
+}
+
+// 알래스카 적립 칸: 좌석 구분·운임(USD)·마일 항공권, 세 방식 결과
+function AsFields({ s, prog, onChange, gc }) {
+  const own = isOwn(s.airline);
+  const m = methodFor(prog, s.date);
+  const auto = asCategory({ ...s, asCat: '' });
+  const r = spFor(s, m);
+  const yr = +String(s.date || '').slice(0, 4) || null;
+  return (
+    <>
+      <label className="checkrow light">
+        <input type="checkbox" checked={!!s.award} onChange={(e) => onChange({ award: e.target.checked })} />
+        <span>마일 항공권 <small>(포인트로 발권 · 상태포인트만 적립)</small></span>
+      </label>
+      {s.award ? (
+        <label className="field"><span>사용한 포인트 <span className="faint">(달러 기준일 때 20포인트당 1SP)</span></span><NumInput value={s.awardPts} suffix="포인트" onChange={(v) => onChange({ awardPts: v })} /></label>
+      ) : own ? (
+        <label className="field"><span>운임 (USD, 세금·수수료 제외) <span className="faint">· 달러 기준일 때 $1 = 5SP</span></span><NumInput value={s.usd} suffix="USD" onChange={(v) => onChange({ usd: v })} /></label>
+      ) : (
+        <label className="field">
+          <span>좌석 구분 <span className="faint">(달러 기준 적립률)</span></span>
+          <select className="input" value={s.asCat || ''} onChange={(e) => onChange({ asCat: e.target.value })}>
+            <option value="">자동 · {CAT[auto.cat].name} {CAT[auto.cat].rate}%{auto.how === 'table' ? ` (${s.cls} 클래스)` : auto.how === 'guess' ? ' (예약 클래스를 넣으면 정확)' : ''}</option>
+            {CATS.filter((c) => c.id !== 'X').map((c) => <option key={c.id} value={c.id}>{c.name} {c.rate}%</option>)}
+          </select>
+        </label>
+      )}
+      <div className="miles-out num">
+        <div>
+          <div className="lab" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {METHOD[m].name}{yr && yr < METHOD_FROM_YEAR ? ` (${yr}년)` : ''} · {r.why}
+          </div>
+          <b>{fmtNum(r.sp)}<small style={{ fontSize: 13, marginLeft: 3 }}>SP</small></b>{r.est && <span className="faint" style={{ marginLeft: 8, fontWeight: 700 }}>추정</span>}
+        </div>
+        <div style={{ display: 'grid', gap: 4, justifyItems: 'end' }}>
+          <button className="link" style={{ fontSize: 12 }} onClick={() => onChange({ showBase: !s.showBase })}>구간 거리 수정</button>
+        </div>
+      </div>
+      <div className="mini3 num">
+        {METHODS.map((x) => {
+          const v = spFor(s, x.id);
+          return <div key={x.id} className={x.id === m ? 'on' : ''}><span>{x.short}</span><b>{fmtNum(v.sp)}</b></div>;
+        })}
+      </div>
+      {!prog && <div className="notice">알래스카 티어가 지갑에 없어요. 지갑에서 추가하면 등급 진행률에 들어가요.</div>}
+      {s.showBase && (
+        <label className="field">
+          <span>구간 거리 (편도, 마일){gc != null && s.baseSource !== 'gc' ? <span className="faint"> · 대권거리 {fmtNum(gc)}</span> : null}</span>
+          <NumInput value={s.baseMiles} suffix="마일" onChange={(v) => onChange({ baseMiles: v, baseSource: 'manual', baseTouched: true })} />
+        </label>
+      )}
+    </>
   );
 }
 
