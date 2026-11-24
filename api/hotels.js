@@ -41,6 +41,19 @@ async function photon(q, bbox, lang) {
 }
 
 export default async function handler(req, res) {
+  try {
+    return await main(req, res);
+  } catch (e) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ hotels: [], error: '호텔 목록을 가져오지 못했어요.', crash: String(e?.stack || e).slice(0, 300) });
+  }
+}
+
+async function main(req, res) {
+  if (req.query.ping) {
+    const t = Date.now();
+    try { const f = await photon('novotel', '100.3,13.5,100.8,14.0', 'en'); return res.status(200).json({ ok: true, n: f.length, ms: Date.now() - t }); } catch (e) { return res.status(200).json({ ok: false, err: String(e.message || e), ms: Date.now() - t }); }
+  }
   const lat = Math.round(+req.query.lat * 100) / 100, lon = Math.round(+req.query.lon * 100) / 100;
   const cc = String(req.query.cc || '').toUpperCase().slice(0, 2);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 85 || Math.abs(lon) > 180) {
