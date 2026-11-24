@@ -311,7 +311,16 @@ export function FlightCompare({ fr, ctx }) {
   const me = useMyCounts(ctx.flights, ctx.today);
   const st = fr.stats;
   const ac = fr.aircraft;
-  if (!st && !ac?.top?.length) return null;
+  if (!st) {
+    return (
+      <div className="pad" style={{ marginTop: 12 }}>
+        <div className="card">
+          <div className="card-h"><span>비행 기록 비교</span></div>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>{fr.name || '친구'}님이 아직 예전 버전이라 비교할 기록이 없어요. 친구가 티어런을 새로고침해서 한 번 열면 많이 탄 항공사·공항·기종 비교가 여기에 나와요.</p>
+        </div>
+      </div>
+    );
+  }
   const rows = [
     ['총 비행', st?.flights, me.n, '편'],
     ['비행 거리', st?.dist, me.dist, '마일'],
