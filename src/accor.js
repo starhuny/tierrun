@@ -33,7 +33,11 @@ const year = (d) => +String(d || '').slice(0, 4);
 // 숙박 목록에 들어가는 보너스 기록 (중국 Accor Plus 활성화: 그날 20박 한 번)
 export const ZH_NIGHTS = 20;
 export const isZhStay = (s) => s?.kind === 'zh';
+// 숙박 목록에 들어가는 보너스 박 기록: 중올플(zh) · 패스트트랙·플라잉블루 이벤트 등(bonus)
+export const isBonusStay = (s) => s?.kind === 'zh' || s?.kind === 'bonus';
+export const bonusLabel = (s) => (isZhStay(s) ? '중올플 활성화' : s?.hotel || '보너스 박');
 export const makeZhStay = (date, id) => ({ id, kind: 'zh', hotel: '중국 Accor Plus 활성화', brand: '', checkIn: date, checkOut: date, nightsOverride: ZH_NIGHTS, pointsOverride: 0, krw: null, note: '' });
+export const makeBonusStay = (date, id, label, nights) => ({ id, kind: 'bonus', hotel: label || '', brand: '', checkIn: date, checkOut: date, nightsOverride: nights ?? null, pointsOverride: 0, krw: null, note: '' });
 const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 export const stayNights = (s) => (s.nightsOverride != null && s.nightsOverride !== '' ? +s.nightsOverride : s.checkIn && s.checkOut ? Math.max(0, days(s.checkIn, s.checkOut)) : 0);
@@ -57,7 +61,7 @@ export function bonusEvents(prog, yr) {
     // 가입·갱신일과 그 뒤 매년 같은 날 30박
     const k = yr != null ? yr - year(prog.explorerDate) : 0;
     const ks = yr != null ? (k >= 0 ? [k] : []) : [0];
-    for (const x of ks) out.push({ date: addYears(prog.explorerDate, x), nights: 30, label: x === 0 && isV2(prog) ? 'Accor+ Explorer' : 'Accor+ Explorer 갱신' });
+    for (const x of ks) out.push({ date: addYears(prog.explorerDate, x), nights: 30, label: x === 0 && isV2(prog) ? 'Accor+ Explorer' : 'Accor+ Explorer 갱신', auto: true });
   }
   for (const f of prog?.fast || []) if (f?.date && +f.nights > 0) out.push({ date: f.date, nights: +f.nights, label: f.label || '보너스 박' });
   return out.filter((b) => b.date);
@@ -71,12 +75,12 @@ export function acYear(prog, stays, yr, today, eur) {
   const after = (d) => !inBase || d > prog.baseDate;
   for (const s of stays || []) {
     const d = stayDate(s);
-    if (isZhStay(s)) {
+    if (isBonusStay(s)) {
       // 보너스 박: v2는 날짜만 맞으면, 예전 입력은 입력한 날 이후만
       if (year(d) !== yr || (!isV2(prog) && !after(d))) continue;
       const n = stayNights(s), w = d <= today ? 'conf' : 'plan';
       r[w].nights += n;
-      r.bonus.push({ date: d, nights: n, label: '중올플 활성화', past: w === 'conf' });
+      r.bonus.push({ date: d, nights: n, label: bonusLabel(s), past: w === 'conf', stayId: s.id });
       r.rows.push({ s, nights: n, points: 0, est: false, past: w === 'conf', bonus: true });
       continue;
     }
@@ -155,22 +159,4 @@ export function remText(s, plan = false) {
   const n = plan ? s.remNPlan : s.remN, p = plan ? s.remPPlan : s.remP;
   if ((n != null && n === 0) || p === 0) return '달성';
   return n != null ? `${n.toLocaleString('ko-KR')}박 또는 ${p.toLocaleString('ko-KR')}P` : `${p.toLocaleString('ko-KR')}P`;
-}
-
-// 보너스 조합 비교: 그 해 실제 숙박 + 기타 보너스(패스트트랙 등)에 멤버십 보너스를 바꿔 가며
-export function combos(stayN, stayP, otherN = 0, { zhUsed = false } = {}) {
-  const list = [
-    { id: 'none', label: '멤버십 보너스 없이', nights: 0 },
-    { id: 'exp', label: 'Accor+ Explorer (+30박)', nights: 30 },
-    ...(zhUsed ? [] : [
-      { id: 'zh', label: '중올플 (+20박)', nights: 20 },
-      { id: 'both', label: 'Explorer + 중올플 (+50박)', nights: 50 },
-    ]),
-  ];
-  return list.map((c) => {
-    const n = stayN + otherN + c.nights;
-    const t = tierBy(n, stayP);
-    const nx = AC_TIERS.find((x) => AC_TIERS.indexOf(x) > AC_TIERS.indexOf(t) && x.nights != null) || null;
-    return { ...c, total: n, tier: t, next: nx, rem: nx ? nx.nights - n : 0 };
-  });
 }

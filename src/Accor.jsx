@@ -6,7 +6,7 @@ import { AC_BENEFITS, AC_EXTRAS, AC_BENEFITS_CHECKED } from './accorBenefits.js'
 import { findAirport } from './airports.js';
 import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid, addDays } from './core.js';
 import {
-  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2, isZhStay, makeZhStay, ZH_NIGHTS,
+  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2, isZhStay, isBonusStay, bonusLabel, makeZhStay, makeBonusStay, ZH_NIGHTS,
 } from './accor.js';
 import { Icon, AirlineMark, Bar, Seg, NumInput, WonInput, DateInput, AirportInput, Ring, CardFace } from './ui.jsx';
 
@@ -173,11 +173,6 @@ export function AcStrip({ prog, ctx, onClick }) {
 }
 
 /* ───────── 티어 추가·수정 ───────── */
-const FAST_PRESETS = [
-  { btn: '패스트트랙 (+9박)', label: '패스트트랙 (1+9)', nights: 9 },
-  { btn: '플라잉블루 1+1', label: '플라잉블루 이벤트 (1+1)', nights: null },
-  { btn: '직접 입력', label: '', nights: null },
-];
 export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
   const yr = thisYear(ctx.today);
   const editing = !!entry;
@@ -192,8 +187,6 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
     const d = entry?.explorerDate || '';
     return legacy && d && d > ctx.today ? `${+d.slice(0, 4) - 1}${d.slice(4)}` : d;
   });
-  const zhRec = (ctx.stays || []).find(isZhStay);
-  const [fast, setFast] = useState(entry?.fast || []);
   const [eur, setEur] = useState(entry?.eur || fx?.rate || DEFAULT_EUR);
   const [eurAuto, setEurAuto] = useState(entry?.eurAuto !== false);
   const [ask, setAsk] = useState(false);
@@ -204,10 +197,9 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
     onSave({
       ...(entry || {}), program: 'ALL', tier, validUntil, nights: +nights || 0, points: +points || 0, baseDate,
       v: 2, explorer, explorerDate: explorer ? explorerDate : '', zh: false, zhDate: '', eurAuto, eur: eurAuto ? fx?.rate || +eur || DEFAULT_EUR : +eur || DEFAULT_EUR,
-      fast: fast.filter((f) => f.date && +f.nights > 0).map((f) => ({ ...f, nights: +f.nights })),
+      fast: [],
     });
   };
-  const setF = (i, patch) => setFast((l) => l.map((f, k) => (k === i ? { ...f, ...patch } : f)));
   return (
     <div className="fade-in">
       <div className="dhead">
@@ -231,38 +223,19 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
             <label className="field"><span>등급 숙박일</span><NumInput value={nights} suffix="박" placeholder="0" onChange={setNights} /></label>
             <label className="field"><span>등급 포인트</span><NumInput value={points} suffix="P" placeholder="0" onChange={setPoints} /></label>
           </div>
-          <p className="help" style={{ margin: 0 }}>숙박일은 <b>실제로 묵은 박수만</b> 넣어 주세요. Explorer·중올플·패스트트랙·플라잉블루 이벤트 같은 보너스 박은 빼고, 아래 보너스 박에 따로 넣으면 돼요. 포인트는 아코르 앱 <b>내 계정 › 대시보드</b>의 등급 포인트 그대로예요. 오늘 이전 숙박은 이 숫자에 들어 있는 걸로 봐요.</p>
+          <p className="help" style={{ margin: 0 }}>숙박일은 <b>실제로 묵은 박수만</b> 넣어 주세요. Explorer·중올플·패스트트랙 같은 보너스 박은 빼 주세요. 보너스 박은 따로 넣어요. 포인트는 아코르 앱 <b>내 계정 › 대시보드</b>의 등급 포인트 그대로예요. 오늘 이전 숙박은 이 숫자에 들어 있는 걸로 봐요.</p>
           {legacy && +entry?.nights > 0 && <div className="notice" style={{ margin: 0 }}>지금 {fmtNum(+entry.nights)}박은 보너스 박이 섞인 앱 숫자일 수 있어요. 보너스를 뺀 실제 투숙 박수로 고쳐 주세요.</div>}
         </div>
         <div className="segcard">
-          <div className="sh">보너스 박</div>
+          <div className="sh">Accor+ Explorer</div>
           <label className="checkrow light">
             <input type="checkbox" checked={explorer} onChange={(e) => setExplorer(e.target.checked)} />
-            <span>Accor+ Explorer 가입 <small>(갱신할 때마다 30박)</small></span>
+            <span>가입했어요 <small>(가입·갱신할 때마다 30박이 자동으로 들어가요)</small></span>
           </label>
           {explorer && (
-            <label className="field"><span>가입일 또는 최근 갱신일 <span className="faint">(이 날과 매년 같은 날 30박)</span></span><DateInput value={explorerDate} onChange={setExplorerDate} /></label>
+            <label className="field"><span>가입일 또는 최근 갱신일</span><DateInput value={explorerDate} onChange={setExplorerDate} /></label>
           )}
-          <div className="help" style={{ margin: 0 }}>중국 Accor Plus(중올플)는 한 번 사는 거라 숙박처럼 넣어요. <b>+ › 숙박 추가 › 중올플 활성화</b>{zhRec ? <> · 지금 {fmtDot(zhRec.checkIn)} 활성화로 들어가 있어요.</> : null}</div>
-          <div className="lab" style={{ marginTop: 4 }}>추가 보너스 박 <span className="faint">(패스트트랙·플라잉블루 이벤트 등)</span></div>
-          {fast.map((f, i) => (
-            <div key={i} className="fastbox">
-              <div className="fasthead">
-                <input className="input sm" value={f.label || ''} placeholder="이름 (예: 패스트트랙)" onChange={(e) => setF(i, { label: e.target.value })} />
-                <button className="icon-btn" style={{ width: 36, height: 36 }} onClick={() => setFast((l) => l.filter((_, k) => k !== i))} aria-label="삭제"><Icon name="close" size={15} /></button>
-              </div>
-              <div className="fastrow">
-                <DateInput value={f.date} onChange={(v) => setF(i, { date: v })} />
-                <NumInput value={f.nights} suffix="박" placeholder="0" onChange={(v) => setF(i, { nights: v })} />
-              </div>
-            </div>
-          ))}
-          <div className="fastadd">
-            {FAST_PRESETS.map((p) => (
-              <button key={p.label} className="btn sm ghost" onClick={() => setFast((l) => [...l, { date: todayISO(), nights: p.nights, label: p.label }])}><Icon name="plus" size={14} />{p.btn}</button>
-            ))}
-          </div>
-          <p className="help" style={{ margin: 0 }}>보너스 박이 들어온(들어올) 날짜와 박수를 넣어 주세요. 오늘 이후면 예정, 지났으면 확정으로 그 해에 더해요. 플라잉블루 1+1처럼 묵은 만큼 더 주는 이벤트는 받은 보너스 박수만 넣으면 돼요.</p>
+          <p className="help" style={{ margin: 0 }}>중올플·패스트트랙·플라잉블루 이벤트처럼 한 번 받는 보너스 박은 <b>+ › 숙박 추가 › 보너스 박</b>으로 넣어요. 숙박과 같이 날짜순 기록에 보여요.</p>
         </div>
         <div className="segcard">
           <div className="sh">환율 <span className="faint" style={{ fontWeight: 600, fontSize: 12 }}>숙박 금액 원화 → 유로 (등급 포인트 추정용)</span></div>
@@ -292,7 +265,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
 
 /* ───────── 숙박 한 줄 ───────── */
 export function StayRow({ s, ctx, onClick }) {
-  if (isZhStay(s)) return <ZhRow s={s} ctx={ctx} onClick={onClick} />;
+  if (isBonusStay(s)) return <StayBonusRow s={s} ctx={ctx} onClick={onClick} />;
   const n = stayNights(s);
   const p = stayPoints(s, ctx.acProg?.eur);
   const d = daysBetween(ctx.today, s.checkIn || s.checkOut);
@@ -324,45 +297,65 @@ export function StayRow({ s, ctx, onClick }) {
   );
 }
 
-function ZhRow({ s, ctx, onClick }) {
-  const n = stayNights(s);
-  const d = daysBetween(ctx.today, s.checkIn);
+// 보너스 박 한 줄 (중올플·패스트트랙 등 기록 / Explorer 자동)
+export function BonusRow({ label, nights, date, sub, krw, ctx, onClick, auto }) {
+  const d = daysBetween(ctx.today, date);
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <button className="frow stayrow" onClick={onClick}>
+    <Tag className={`frow stayrow bonusrow${auto ? ' auto' : ''}`} onClick={onClick}>
       {d < 0 ? <div className="dday"><span className="done"><Icon name="check" size={16} stroke={2.6} /></span><small>적용됨</small></div>
         : d === 0 ? <div className="dday today"><b>오늘</b></div>
         : <div className="dday"><b className="num">{d}</b><small>일 후</small></div>}
       <div>
         <div className="fmeta">
-          <span className="mark sm bed"><Icon name="plus" size={13} /></span>
-          <span>보너스 박</span>
-          <span className="d">{fmtDate(s.checkIn)}</span>
+          <span className="mark sm bonus"><Icon name="plus" size={13} /></span>
+          <span>보너스 박{auto ? ' · 자동' : ''}</span>
+          <span className="d">{fmtDate(date)}</span>
         </div>
-        <div className="ftitle">중올플 활성화 +{n}박</div>
-        <div className="ftimes num"><span>중국 Accor Plus</span><span>{fmtDate(s.checkIn, { weekday: false })} 적용</span></div>
-        <div className="fchips num">
-          <span className="chip"><b>+{n}</b>박</span>
-          {+s.krw > 0 && <span className="chip"><b>{fmtWon(s.krw / n)}</b>/박</span>}
-          <span className="badge cr-ALL">아코르</span>
-        </div>
+        <div className="ftitle">{label} <span className="bn num">+{nights}박</span></div>
+        {sub && <div className="ftimes"><span>{sub}</span></div>}
+        {+krw > 0 && <div className="fchips num"><span className="chip"><b>{fmtWon(krw / nights)}</b>/박</span></div>}
       </div>
-    </button>
+    </Tag>
   );
 }
+function StayBonusRow({ s, ctx, onClick }) {
+  const n = stayNights(s);
+  return <BonusRow label={bonusLabel(s)} nights={n} date={s.checkIn} sub={isZhStay(s) ? '중국 Accor Plus · 한 번만' : s.note || ''} krw={s.krw} ctx={ctx} onClick={onClick} />;
+}
 
-// 중올플 활성화 입력
-function ZhForm({ s, set, tried, other }) {
+// 보너스 박 입력
+const BONUS_KINDS = [
+  { id: 'zh', label: '중올플 활성화', nights: ZH_NIGHTS, help: '중국 Accor Plus를 사서 활성화하면 20박이 한 번 들어와요.' },
+  { id: 'fast', label: '패스트트랙 (1+9)', nights: 9, help: '패스트트랙 오퍼로 받은(받을) 보너스 박이에요.' },
+  { id: 'fb', label: '플라잉블루 이벤트 (1+1)', nights: null, help: '묵은 만큼 더 주는 이벤트는 받은 보너스 박수만 넣어 주세요.' },
+  { id: 'etc', label: '', nights: null, help: '이름과 박수를 직접 넣어 주세요.' },
+];
+const kindOf = (s) => (isZhStay(s) ? 'zh' : BONUS_KINDS.find((k) => k.label && k.label === s.hotel)?.id || 'etc');
+function BonusForm({ s, set, setS, tried, otherZh, editing }) {
+  const k = kindOf(s);
+  const kd = BONUS_KINDS.find((x) => x.id === k);
+  const pick = (id) => {
+    const x = BONUS_KINDS.find((y) => y.id === id);
+    const base = id === 'zh' ? makeZhStay(s.checkIn, s.id) : makeBonusStay(s.checkIn, s.id, x.label, x.nights);
+    setS({ ...base, krw: s.krw, note: s.note });
+  };
   return (
     <div className="segcard">
-      <p className="help" style={{ margin: 0 }}>중국 Accor Plus(중올플)를 사서 활성화하면 등급 숙박일 <b>20박</b>이 한 번 들어와요. 활성화한 날이 속한 해의 등급에 더해져요.</p>
-      {other && <div className="notice" style={{ margin: 0 }}>이미 {fmtDot(other.checkIn)} 중올플 활성화 기록이 있어요. 한 번만 들어오는 보너스라 중복되지 않게 확인해 주세요.</div>}
-      <label className="field"><span>활성화한 날</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: v })} invalid={tried && !s.checkIn} /></label>
-      {tried && !s.checkIn && <div className="err-t">활성화한 날을 넣어 주세요.</div>}
+      {!editing && (
+        <div className="bkinds">
+          {BONUS_KINDS.map((x) => <button key={x.id} type="button" className={k === x.id ? 'on' : ''} onClick={() => pick(x.id)}>{x.id === 'etc' ? '직접 입력' : x.label}{x.nights ? <small> +{x.nights}</small> : null}</button>)}
+        </div>
+      )}
+      <p className="help" style={{ margin: 0 }}>{kd.help} 들어온 날이 속한 해의 등급에 더해져요.</p>
+      {k === 'zh' && otherZh && <div className="notice" style={{ margin: 0 }}>이미 {fmtDot(otherZh.checkIn)} 중올플 기록이 있어요. 한 번만 받는 보너스라 중복되지 않게 확인해 주세요.</div>}
+      {k !== 'zh' && <label className="field"><span>이름</span><input className="input" value={s.hotel} placeholder="예: 패스트트랙 (1+9)" onChange={(e) => set({ hotel: e.target.value })} /></label>}
       <div className="row2">
-        <label className="field"><span>등급 숙박일</span><NumInput value={s.nightsOverride} suffix="박" placeholder={String(ZH_NIGHTS)} onChange={(v) => set({ nightsOverride: v })} /></label>
-        <label className="field"><span>결제 금액 <span className="faint">(선택)</span></span><WonInput value={s.krw} onChange={(v) => set({ krw: v })} /></label>
+        <label className="field"><span>{k === 'zh' ? '활성화한 날' : '들어온 날'}</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: v })} invalid={tried && !s.checkIn} /></label>
+        <label className="field"><span>보너스 박</span><NumInput value={s.nightsOverride} suffix="박" placeholder={k === 'zh' ? String(ZH_NIGHTS) : '0'} onChange={(v) => set({ nightsOverride: v })} /></label>
       </div>
-      <p className="help" style={{ margin: 0 }}>금액을 넣으면 단가 탭에서 박당 비용에 함께 계산돼요.</p>
+      {tried && (!s.checkIn || (k !== 'zh' && !(+s.nightsOverride > 0))) && <div className="err-t">날짜와 박수를 넣어 주세요.</div>}
+      <label className="field"><span>결제 금액 <span className="faint">(선택 · 단가 탭 박당 비용에 포함)</span></span><WonInput value={s.krw} onChange={(v) => set({ krw: v })} /></label>
       <label className="field"><span>메모 <span className="faint">(선택)</span></span><input className="input" value={s.note || ''} onChange={(e) => set({ note: e.target.value })} /></label>
     </div>
   );
@@ -378,33 +371,33 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
   const set = (p) => setS((x) => ({ ...x, ...p }));
   const n = stayNights({ ...s, nightsOverride: null });
   const p = stayPoints({ ...s, pointsOverride: null }, ctx.acProg?.eur);
-  const zh = isZhStay(s);
+  const zh = isBonusStay(s);
   const otherZh = (ctx.stays || []).find((x) => isZhStay(x) && x.id !== s.id);
-  const valid = zh ? !!s.checkIn : s.hotel.trim() && s.checkIn && s.checkOut && s.checkOut > s.checkIn;
+  const valid = zh ? !!s.checkIn && (isZhStay(s) || (+s.nightsOverride > 0 && s.hotel.trim())) : s.hotel.trim() && s.checkIn && s.checkOut && s.checkOut > s.checkIn;
   const save = () => {
     setTried(true);
     if (!valid) return;
     const krw = s.krw == null || s.krw === '' ? null : +s.krw;
-    if (zh) return onSave({ ...s, id: s.id || uid(), checkOut: s.checkIn, nightsOverride: +s.nightsOverride > 0 ? +s.nightsOverride : ZH_NIGHTS, pointsOverride: 0, krw });
+    if (zh) return onSave({ ...s, id: s.id || uid(), hotel: s.hotel.trim(), checkOut: s.checkIn, nightsOverride: +s.nightsOverride > 0 ? +s.nightsOverride : ZH_NIGHTS, pointsOverride: 0, krw });
     onSave({ ...s, id: s.id || uid(), kind: undefined, hotel: s.hotel.trim(), krw });
   };
   // 새로 넣을 때만 종류를 고를 수 있음
   const setKind = (k) => {
-    if (k === (zh ? 'zh' : 'stay')) return;
+    if (k === (zh ? 'bonus' : 'stay')) return;
     setTried(false);
-    setS(k === 'zh' ? { ...makeZhStay(s.checkIn || ctx.today, null) } : { ...blankStay(), checkIn: '', checkOut: '' });
+    setS(k === 'bonus' ? makeBonusStay(s.checkIn || ctx.today, null, BONUS_KINDS[1].label, BONUS_KINDS[1].nights) : { ...blankStay(), checkIn: '', checkOut: '' });
   };
-  const zN = +s.nightsOverride > 0 ? +s.nightsOverride : ZH_NIGHTS;
+  const zN = +s.nightsOverride > 0 ? +s.nightsOverride : isZhStay(s) ? ZH_NIGHTS : 0;
   return (
     <div className="fade-in">
       <div className="dhead">
         <span className="mark bed" style={{ background: '#1e1852' }}><Icon name="bed" size={16} /></span>
-        <div><div className="k">아코르 ALL · 등급 숙박일·포인트 자동 계산</div><h2>{initial?.id ? (zh ? '중올플 활성화 편집' : '숙박 편집') : '숙박 추가'}</h2></div>
+        <div><div className="k">아코르 ALL · 등급 숙박일·포인트 자동 계산</div><h2>{initial?.id ? (zh ? '보너스 박 편집' : '숙박 편집') : '숙박 추가'}</h2></div>
         <button className="icon-btn" onClick={onCancel} aria-label="닫기"><Icon name="close" size={18} /></button>
       </div>
       <div className="form">
-        {!initial?.id && <Seg options={[['stay', '호텔 숙박'], ['zh', '중올플 활성화 +20박']]} value={zh ? 'zh' : 'stay'} onChange={setKind} />}
-        {zh ? <ZhForm s={s} set={set} tried={tried} other={otherZh} /> : (
+        {!initial?.id && <Seg options={[['stay', '호텔 숙박'], ['bonus', '보너스 박']]} value={zh ? 'bonus' : 'stay'} onChange={setKind} />}
+        {zh ? <BonusForm s={s} set={set} setS={setS} tried={tried} otherZh={otherZh} editing={!!initial?.id} /> : (
         <div className="segcard">
           <CityInput value={stayPlace(s)} onPick={(c) => set({ cityName: c.ko, cityEn: c.en, cc: c.cc, lat: c.lat, lon: c.lon, cityLat: c.lat, cityLon: c.lon, city: '', hotelId: null })} />
           <HotelPicker s={s} set={set} onTypeName={(v) => set({ hotel: v, hotelId: null, ...(brandTouched ? {} : { brand: detectBrand(v) || s.brand }), ...(s.hotelId && s.cityLat != null ? { lat: s.cityLat, lon: s.cityLon } : {}) })} />
@@ -449,7 +442,7 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
         ) : (
           <div className="line num"><span>등급 <b>{fmtNum(s.nightsOverride ?? n)}박 · {fmtNum(s.pointsOverride ?? p.pts)}P</b></span><span>{+s.krw > 0 && n > 0 ? <>박당 <b>{fmtWon(s.krw / n)}</b></> : '금액 미입력'}</span></div>
         )}
-        <button className="btn primary block" onClick={save}>{initial?.id ? '저장' : zh ? '중올플 활성화 추가' : '숙박 추가'}</button>
+        <button className="btn primary block" onClick={save}>{initial?.id ? '저장' : zh ? '보너스 박 추가' : '숙박 추가'}</button>
       </div>
     </div>
   );
@@ -465,82 +458,133 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
   const s = useMemo(() => acSummary(prog, stays, today, yr, prog.eur), [prog, stays, today, yr]);
   const nt = s.next;
   const dleft = daysBetween(today, s.deadline);
+  const done = !!s.achieved && (s.stretch || !nt);
+  // 그 해 기록: 숙박·보너스 박 기록 + Explorer 자동 보너스, 날짜순
+  const items = [
+    ...s.rows.map((r) => ({ key: r.s.id, date: stayDate(r.s), r })),
+    ...s.bonus.filter((b) => b.auto).map((b) => ({ key: `exp-${b.date}`, date: b.date, b })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
   return (
     <div className="fade-in">
       {head}
       <div className="pad" style={{ paddingTop: 6 }}><CardFace {...acFace(prog, stays, today)} /></div>
       <div className="pad" style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-        <Seg small light options={[yr0, yr0 + 1].map((y) => [y, `${y}년`])} value={yr} onChange={setYr} />
-        <Seg small options={[['prog', '진행'], ['combo', '보너스 조합'], ['stays', '숙박'], ['perks', '혜택']]} value={tab} onChange={setTab} />
+        <Seg small options={[['prog', '진행'], ['perks', '등급 혜택']]} value={tab} onChange={setTab} />
       </div>
 
       {tab === 'prog' && (
         <>
-          {s.achieved && (
-            <div className="pad" style={{ marginTop: 14 }}>
+          <div className="pad" style={{ marginTop: 10 }}>
+            <Seg small light options={[yr0, yr0 + 1].map((y) => [y, `${y}년 실적`])} value={yr} onChange={setYr} />
+          </div>
+
+          {/* 1. 결론: 달성했나 / 얼마나 남았나 */}
+          {s.achieved ? (
+            <div className="pad" style={{ marginTop: 12 }}>
               <div className="achv" style={{ background: s.achieved.bg, color: s.achieved.ink }}>
                 <span className="achv-ic"><Icon name="check" size={22} /></span>
                 <div>
-                  <div className="k">{yr}년 실적 · 확정</div>
+                  <div className="k">{yr}년 실적</div>
                   <h3>{s.achieved.name} 달성</h3>
-                  <div className="achv-n num">{fmtNum(s.conf.nights)}박{s.plan.nights ? ` (+예정 ${fmtNum(s.plan.nights)})` : ''} · {fmtNum(s.conf.points)}P{s.plan.points ? ` (+예정 ${fmtNum(s.plan.points)})` : ''}</div>
-                  <p className="num">{fmtDot(s.validUntil)}까지 {s.achieved.name}{s.achieved.id === s.held.id ? ' 유지' : ''}예요.{s.achieved.nights != null ? ` ${yr + 1}년에 ${s.achieved.nights}박 또는 ${fmtNum(s.achieved.points)}P를 채우면 ${yr + 2}.12.31까지 이어져요.` : ''}</p>
+                  <p className="num">{fmtDot(s.validUntil)}까지 {s.achieved.name}예요.{s.achieved.nights != null ? ` ${yr + 1}년에 ${s.achieved.nights}박 또는 ${fmtNum(s.achieved.points)}P면 ${yr + 2}년 말까지 이어져요.` : ''}</p>
                 </div>
+              </div>
+            </div>
+          ) : (
+            <div className="goal">
+              <h3>{nt ? `${s.goal}까지 ${remText(s)}` : '최고 등급'}</h3>
+              <div className="scope">{yr}년 12월 31일까지{dleft >= 0 && yr === yr0 ? ` · D-${dleft}` : ''} · 달성하면 {fmtDot(s.validUntil)}까지</div>
+              {s.achievedPlan && <div className="notice" style={{ margin: '10px 0 0' }}>예정된 숙박·보너스 박까지 마치면 <b>{s.achievedPlan.name} 달성</b>이에요.</div>}
+              {nt && (
+                <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+                  {nt.nights != null && (
+                    <div>
+                      <div className="pl num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}><span className="muted">등급 숙박일</span><b>{fmtNum(s.conf.nights)}{s.plan.nights ? <span style={{ color: 'var(--sky-ink)' }}> +{fmtNum(s.plan.nights)}</span> : null} / {nt.nights}박</b></div>
+                      <Bar conf={Math.min(1, s.conf.nights / nt.nights)} plan={Math.max(0, Math.min(1, s.all.nights / nt.nights) - Math.min(1, s.conf.nights / nt.nights))} done={s.conf.nights >= nt.nights} />
+                    </div>
+                  )}
+                  <div>
+                    <div className="pl num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}><span className="muted">등급 포인트</span><b>{fmtNum(s.conf.points)}{s.plan.points ? <span style={{ color: 'var(--sky-ink)' }}> +{fmtNum(s.plan.points)}</span> : null} / {fmtNum(nt.points)}P</b></div>
+                    <Bar conf={Math.min(1, s.conf.points / nt.points)} plan={Math.max(0, Math.min(1, s.all.points / nt.points) - Math.min(1, s.conf.points / nt.points))} done={s.conf.points >= nt.points} />
+                  </div>
+                  <div className="legend"><span>확정</span><span className="p">예정</span><span style={{ marginLeft: 'auto' }}>박수·포인트 중 하나만 채우면 돼요</span></div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 2. 어떻게 계산됐나: 박수 내역 */}
+          <Ledger s={s} prog={prog} yr={yr} target={s.achieved || nt} />
+
+          {/* 3. 다음 목표 (달성 후) */}
+          {s.achieved && nt && !s.stretch && (
+            <div className="pad" style={{ marginTop: 10 }}>
+              <div className="card">
+                <div className="card-h"><span>다음 · {nt.name}까지</span><b className="num" style={{ color: 'var(--ink)' }}>{remText(s)}</b></div>
+                <Bar conf={s.conf01} plan={Math.max(0, s.all01 - s.conf01)} thin />
               </div>
             </div>
           )}
           {s.stretch && <DiamondCard s={s} eur={prog.eur} />}
-          {!s.stretch && (nt || !s.achieved) && (<>
-          <div className="goal">
-            <h3>{nt ? (s.achieved ? `다음 목표 · ${nt.name}까지` : `${s.goal}까지`) : '최고 등급 달성'}</h3>
-            <div className="scope">{yr}.01.01 ~ {yr}.12.31{dleft >= 0 && yr === yr0 ? ` · D-${dleft}` : ''} · 딴 등급은 {fmtDot(s.validUntil)}까지</div>
-            {s.achievedPlan && <div className="notice" style={{ margin: '10px 0 0' }}>예정된 숙박·보너스 박까지 마치면 <b>{s.achievedPlan.name} 달성</b>이에요.</div>}
-            <div className="ringwrap">
-              <Ring conf={s.conf01} all={s.all01}>
-                <b className="num">{Math.floor(s.conf01 * 1000) / 10}%</b>
-                <small>{s.byNights ? '숙박일 기준' : '포인트 기준'}</small>
-              </Ring>
-              <div className="kv num">
-                <div><span className="k">숙박일</span><span className="v">{fmtNum(s.conf.nights)}{s.plan.nights ? <span style={{ color: 'var(--sky-ink)' }}> +{fmtNum(s.plan.nights)}</span> : null}박</span></div>
-                <div><span className="k">포인트</span><span className="v">{fmtNum(s.conf.points)}{s.plan.points ? <span style={{ color: 'var(--sky-ink)' }}> +{fmtNum(s.plan.points)}</span> : null}P</span></div>
-                {nt && <div><span className="k">목표</span><span className="v">{nt.nights != null ? `${nt.nights}박 / ` : ''}{fmtNum(nt.points)}P</span></div>}
-                <div className="legend" style={{ marginTop: 4 }}><span>확정</span><span className="p">예정</span></div>
-              </div>
-            </div>
-          </div>
-          {nt && (
-            <div className="pad" style={{ display: 'grid', gap: 12, marginTop: 4 }}>
-              {nt.nights != null && (
-                <div>
-                  <div className="pl num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}><span className="muted">등급 숙박일</span><b>{fmtNum(s.conf.nights)} / {nt.nights}박</b></div>
-                  <Bar conf={Math.min(1, s.conf.nights / nt.nights)} plan={Math.max(0, Math.min(1, s.all.nights / nt.nights) - Math.min(1, s.conf.nights / nt.nights))} done={s.conf.nights >= nt.nights} />
-                </div>
+
+          {/* 4. 그 해 기록 */}
+          <div className="section-h"><span>{yr}년 기록</span><span className="faint num">{items.length}건</span></div>
+          {items.length ? items.map((it) => (
+            <div key={it.key} className="rowwrap">
+              {it.b ? (
+                <BonusRow label="Accor+ Explorer" nights={it.b.nights} date={it.b.date} sub="가입·갱신 때마다 자동 · 설정에서 바꿔요" ctx={ctx} auto />
+              ) : (
+                <>
+                  <StayRow s={it.r.s} ctx={ctx} onClick={() => onOpenStay(it.r.s.id)} />
+                  {it.r.included && <div className="incl-note">입력한 숫자({fmtDot(prog.baseDate)})에 이미 들어 있어 더하지 않아요</div>}
+                </>
               )}
-              <div>
-                <div className="pl num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}><span className="muted">등급 포인트{nt.nights == null ? ' (다이아몬드는 포인트로만)' : ''}</span><b>{fmtNum(s.conf.points)} / {fmtNum(nt.points)}P</b></div>
-                <Bar conf={Math.min(1, s.conf.points / nt.points)} plan={Math.max(0, Math.min(1, s.all.points / nt.points) - Math.min(1, s.conf.points / nt.points))} done={s.conf.points >= nt.points} />
-              </div>
             </div>
-          )}
-          </>)}
-          <div className="tiles num" style={{ marginTop: 10 }}>
-            <div className="tile"><div className="k">{nt ? `${s.goal}까지` : '다음 등급'}</div><div className="v" style={{ fontSize: 16 }}>{nt ? remText(s) : '–'}</div><div className="s">{nt ? `예정 포함 ${remText(s, true)}` : '최고 등급'}</div></div>
-            <div className="tile"><div className="k">{yr}년 실적으로</div><div className="v">{s.earnedPlan.name}</div><div className="s">예정 포함 · {fmtDot(s.validUntil)}까지</div></div>
-            <div className="tile"><div className="k">보너스 박</div><div className="v">{s.bonus.length ? `+${fmtNum(s.bonusN)}박` : '–'}</div><div className="s">{s.bonus.length ? s.bonus.map((b) => `${b.label}${b.past ? '' : ' (예정)'}`).join(' · ') : `${yr}년 보너스 없음`}</div></div>
-            <div className="tile"><div className="k">지금 등급</div><div className="v">{s.held.name}</div><div className="s">{prog.validUntil ? `${fmtDot(prog.validUntil)}까지` : '유효기간 미입력'}</div></div>
-          </div>
-          {s.est > 0 && <div className="notice" style={{ margin: '8px 16px 0' }}>등급 포인트는 금액으로 추정한 값이 {s.est}건 있어요. 숙박 후 아코르 앱 값으로 고치면 정확해져요.</div>}
-          <StayList rows={s.rows} ctx={ctx} title={`${yr}년 숙박`} onOpen={onOpenStay} onAdd={onAddStay} base={prog.baseDate} />
-          <p className="basis">입력한 실제 투숙 박수·포인트(입력한 날까지)에 그 뒤 숙박과 그 해 보너스 박(Explorer·중올플·추가 보너스)을 더해 계산해요. 등급 포인트는 원화 금액을 유로로 바꿔 브랜드별 적립률(10유로당 25·12.5·10·5P)로 추정한 참고값이고, 실제 적립은 아코르 기준이 우선이에요.</p>
+          )) : <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>{yr}년 숙박·보너스 박이 아직 없어요.</p>}
+          <div className="pad" style={{ marginTop: 10 }}><button className="btn ghost block" onClick={onAddStay}><Icon name="plus" size={17} />숙박·보너스 박 추가</button></div>
+          {s.est > 0 && <div className="notice" style={{ margin: '10px 16px 0' }}>등급 포인트는 금액으로 추정한 값이 {s.est}건 있어요. 숙박 후 아코르 앱 값으로 고치면 정확해져요.</div>}
+          <p className="basis">등급 포인트 추정은 원화 금액을 유로로 바꿔 브랜드별 적립률(10유로당 25·12.5·10·5P)로 계산한 참고값이에요. 실제 적립은 아코르 기준이 우선이에요.</p>
         </>
       )}
 
-      {tab === 'combo' && <ComboTab prog={prog} s={s} yr={yr} stays={stays} />}
       {tab === 'perks' && <PerksTab held={s.held} />}
-      {tab === 'stays' && (
-        <StayList rows={[...stays].sort((a, b) => stayDate(b).localeCompare(stayDate(a))).map((x) => ({ s: x }))} ctx={ctx} title="전체 숙박" onOpen={onOpenStay} onAdd={onAddStay} />
-      )}
       {footer}
+    </div>
+  );
+}
+
+// 박수 내역: 입력값 + 그 뒤 숙박 + 보너스 박 = 합계
+function Ledger({ s, prog, yr, target }) {
+  const after = s.rows.filter((r) => !r.bonus && !r.included);
+  const sum = (l, k) => l.reduce((a, r) => a + r[k], 0);
+  const aConf = after.filter((r) => r.past), aPlan = after.filter((r) => !r.past);
+  const lines = [];
+  if (s.base.nights || s.base.points) lines.push({ k: '실제 숙박', d: `${fmtDot(prog.baseDate)}까지 직접 입력`, n: s.base.nights, p: s.base.points });
+  if (after.length) lines.push({ k: '그 뒤 숙박', d: `${after.length}건 · 아래 기록`, n: sum(aConf, 'nights'), p: sum(aConf, 'points'), np: sum(aPlan, 'nights'), pp: sum(aPlan, 'points') });
+  for (const b of s.bonus) lines.push({ k: b.label, d: `${fmtDot(b.date)}${b.past ? '' : ' 예정'}`, n: b.past ? b.nights : 0, np: b.past ? 0 : b.nights, bonus: true });
+  const v = (a, b, u) => (a || b ? <>{a ? fmtNum(a) : b ? '' : 0}{b ? <span className="pl-p">{a ? ' +' : '+'}{fmtNum(b)}</span> : null}{u}</> : <span className="faint">–</span>);
+  return (
+    <div className="pad" style={{ marginTop: 12 }}>
+      <div className="card ledger">
+        <div className="card-h"><span>{yr}년 등급 실적 내역</span><span className="faint">박 · 포인트</span></div>
+        {lines.length ? lines.map((l, i) => (
+          <div key={i} className={`lrow num${l.bonus ? ' b' : ''}`}>
+            <span className="lk"><b>{l.bonus && <span className="lb">보너스</span>}{l.k}</b><small>{l.d}</small></span>
+            <span className="lv">{v(l.n, l.np, '박')}</span>
+            <span className="lv">{l.bonus ? <span className="faint">–</span> : v(l.p, l.pp, 'P')}</span>
+          </div>
+        )) : <p className="muted" style={{ margin: 0, fontSize: 14 }}>아직 없어요. 설정에서 올해 숙박일·포인트를 넣거나 숙박을 추가해 주세요.</p>}
+        {lines.length > 0 && (
+          <>
+            <div className="lrow num tot">
+              <span className="lk"><b>합계</b></span>
+              <span className="lv">{v(s.conf.nights, s.plan.nights, '박')}</span>
+              <span className="lv">{v(s.conf.points, s.plan.points, 'P')}</span>
+            </div>
+            {target && <div className="ltgt num">{target.name} 기준 {target.nights != null ? `${target.nights}박 또는 ` : ''}{fmtNum(target.points)}P{target.nights == null ? ' (포인트로만)' : ''}</div>}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -616,55 +660,4 @@ function DiamondCard({ s, eur }) {
   );
 }
 
-function StayList({ rows, ctx, title, onOpen, onAdd, base }) {
-  return (
-    <>
-      <div className="section-h"><span>{title}</span><span className="faint num">{rows.length}건</span></div>
-      {rows.length ? rows.map((r) => (
-        <div key={r.s.id} className="rowwrap">
-          <StayRow s={r.s} ctx={ctx} onClick={() => onOpen(r.s.id)} />
-          {r.included && <div className="incl-note">입력한 {fmtDot(base)} 숫자에 이미 들어 있어서 더하지 않아요</div>}
-        </div>
-      )) : <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>아직 숙박이 없어요.</p>}
-      {onAdd && <div className="pad" style={{ marginTop: 10 }}><button className="btn ghost block" onClick={onAdd}><Icon name="plus" size={17} />숙박 추가</button></div>}
-    </>
-  );
-}
 
-function ComboTab({ prog, s, yr, stays }) {
-  // 그 해 실제 숙박 + 기타 보너스(패스트트랙 등)를 두고 멤버십 보너스(Explorer·중올플)만 바꿔 가며 비교
-  const v2 = isV2(prog);
-  const real = s.rows.filter((r) => !r.bonus && !r.included);
-  const stayN = (v2 ? s.base.nights : 0) + real.reduce((a, r) => a + r.nights, 0);
-  const stayP = (v2 ? s.base.points : 0) + real.reduce((a, r) => a + r.points, 0);
-  const isMember = (b) => /Explorer|중올플/.test(b.label);
-  const otherN = s.bonus.filter((b) => !isMember(b)).reduce((a, b) => a + b.nights, 0);
-  const zhRec = (stays || []).find(isZhStay);
-  const zhYear = zhRec ? +String(zhRec.checkIn).slice(0, 4) : 0;
-  const zhUsed = zhYear > 0 && zhYear < yr;
-  const expIn = s.bonus.some((b) => /Explorer/.test(b.label));
-  const zhIn = s.bonus.some((b) => /중올플/.test(b.label));
-  const list = combos(stayN, stayP, otherN, { zhUsed });
-  const mine = (id) => (id === 'none' ? !expIn && !zhIn : id === 'exp' ? expIn && !zhIn : id === 'zh' ? zhIn && !expIn : expIn && zhIn);
-  return (
-    <div className="pad" style={{ marginTop: 14 }}>
-      <div className="card">
-        <div className="card-h"><span>{yr}년 숙박 {fmtNum(stayN)}박{otherN ? ` + 기타 보너스 ${fmtNum(otherN)}박` : ''} 기준</span></div>
-        <div className="cmp">
-          {list.map((c) => (
-            <div key={c.id} className="cmpbar">
-              <div className="h num">
-                <b>{c.label}</b>
-                {mine(c.id) ? <span className="badge">지금 내 상태</span> : null}
-                <span className="v">{c.tier.name}</span>
-              </div>
-              <Bar conf={Math.min(1, c.total / 60)} thin done={c.total >= 60} />
-              <div className="help num">{fmtNum(c.total)}박{c.next ? ` · ${c.next.name}까지 ${fmtNum(c.rem)}박` : ' · 플래티넘 이상'} · {yr + 1}년 말까지 유지</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <p className="basis" style={{ padding: '12px 4px' }}>Accor+ Explorer는 가입·갱신할 때마다 30박, 중국 Accor Plus(중올플)는 가입할 때 20박이 한 번 들어와요.{zhUsed ? ` 중올플은 ${zhYear}년에 이미 받아서 이 해 비교에서 뺐어요.` : ''} 다이아몬드는 등급 포인트(26,000P)로만 갈 수 있어요.</p>
-    </div>
-  );
-}
