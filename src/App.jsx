@@ -182,6 +182,21 @@ export default function App() {
     return () => clearTimeout(t);
   }, [social, profile, flights, goals, today, ad]);
   const together = useMemo(() => togetherMap(flights, friends, today), [flights, friends, today]);
+  // 새 버전 배포 알림 (열어 둔 화면이 예전 버전이면 새로고침 안내)
+  const [newVer, setNewVer] = useState(false);
+  useEffect(() => {
+    if (import.meta.env.VITE_TARGET === 'artifact' || import.meta.env.DEV) return;
+    const check = () =>
+      fetch('/version.json', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((v) => v?.id && v.id !== __BUILD_ID__ && setNewVer(true))
+        .catch(() => {});
+    const onVis = () => document.visibilityState === 'visible' && check();
+    check();
+    const iv = setInterval(check, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
   const removeFriend = async (uid) => {
     const fr = friends.find((x) => x.uid === uid);
     try {
@@ -494,6 +509,12 @@ export default function App() {
       {onMap && !flights.length && (
         <div className="map-card" style={{ padding: 16 }}>
           <p style={{ margin: 0 }} className="muted">항공편을 추가하면 노선이 지구본에 그려져요.</p>
+        </div>
+      )}
+      {newVer && (
+        <div className="update-bar" role="status">
+          새 버전이 나왔어요
+          <button onClick={() => location.reload()}>새로고침</button>
         </div>
       )}
       {toast && (
