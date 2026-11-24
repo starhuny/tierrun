@@ -40,7 +40,7 @@ export function Icon({ name, size = 20, stroke = 2, fill = false, ...rest }) {
 const LOGO_SRC = [(c) => `https://images.kiwi.com/airlines/64/${c}.png`, (c) => `https://pics.avs.io/al_square/64/64/${c}.png`];
 const logoFail = new Map(); // 코드별로 실패한 단계 기억
 // 직접 넣은 로고 (public/logos) — 있으면 이걸 먼저 씀
-const CUSTOM_LOGO = { CX: '/logos/CX.png' };
+const CUSTOM_LOGO = { CX: '/logos/CX.png', KE: '/logos/KE.png' };
 export function AirlineMark({ code, size }) {
   const a = AIRLINE[code];
   const c = String(code || '').toUpperCase();
