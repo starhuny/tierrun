@@ -130,7 +130,8 @@ export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onFrie
         <Reorder wallet={wallet} onDone={(w) => { onReorder(w); setEdit(false); }} />
       ) : (
         <div className="wstack">
-          {wallet.map((w) => {
+          {/* 1순위가 맨 앞(맨 아래, 다 보이는 카드)에 오도록 거꾸로 쌓음 */}
+          {[...wallet].reverse().map((w) => {
             const f = faceFor(w, ctx, goals);
             return f && (
               <button key={w.program} className="wcard" onClick={() => onOpen(w.program)} aria-label={`${PROGRAMS[w.program].name} 열기`}>
@@ -142,7 +143,7 @@ export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onFrie
       )}
       <div className="wbtns">
         {!edit && wallet.length > 1 && <button className="btn sm ghost" onClick={() => setEdit(true)}><Icon name="list" size={15} />순서 바꾸기</button>}
-        {!edit && <p className="help" style={{ margin: 0, textAlign: 'center' }}>지갑 순서대로 ‘내 항공편’ 맨 위에서 옆으로 넘기며 볼 수 있어요.</p>}
+        {!edit && <p className="help" style={{ margin: 0, textAlign: 'center' }}>맨 앞 카드가 1순위예요. ‘내 항공편’ 맨 위 띠와 등급 현황도 이 순서로 보여요.</p>}
       </div>
       <div className="section-h"><span>티어 추가</span></div>
       <div className="pad" style={{ display: 'grid', gap: 8 }}>
@@ -193,6 +194,7 @@ function Reorder({ wallet, onDone }) {
   };
   return (
     <div className="pad">
+      <p className="help" style={{ margin: '0 2px 8px' }}>1번이 지갑 맨 앞 카드예요. 손잡이를 잡고 끌어서 바꿔요.</p>
       <div className="wreorder" style={{ height: list.length * ROW_H }}>
         {list.map((w, i) => {
           const p = PROGRAMS[w.program];
