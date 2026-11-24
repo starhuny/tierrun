@@ -61,7 +61,7 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
   const [fname, setFname] = useState('');
   const [picked, setPicked] = useState(() => new Set());
   const [groups, setGroups] = useState({ KE: true, ST: true, OZ: true });
-  const [fillOld, setFillOld] = useState(true);
+  const [showDup, setShowDup] = useState(false);
   const bd = baselineDate(profile);
 
   const onFile = async (file) => {
@@ -80,15 +80,16 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
     }
   };
 
-  const shown = useMemo(() => (res ? res.rows.filter((x) => groups[x.group]) : []), [res, groups]);
+  const shownAll = useMemo(() => (res ? res.rows.filter((x) => groups[x.group]) : []), [res, groups]);
+  const shown = shownAll.filter((x) => !x.dup); // 새로 추가할 수 있는 항공편
+  const dups = shownAll.filter((x) => x.dup); // 이미 앱에 있는 항공편 (기종만 반영)
   const chosen = shown.filter((x) => picked.has(x.key));
   const totalMi = chosen.reduce((a, x) => a + earnedMiles(x.flight), 0);
   const count = (g) => res?.rows.filter((x) => x.group === g).length || 0;
   const toggle = (k) => setPicked((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const setAll = (on) => setPicked((s) => { const n = new Set(s); shown.forEach((x) => (on ? n.add(x.key) : n.delete(x.key))); return n; });
-  const dupCount = shown.filter((x) => x.dup).length;
   const beforeBase = bd ? chosen.filter((x) => x.flight.date <= bd).length : 0;
-  const patches = res ? res.rows.filter((x) => x.patch).map((x) => x.patch) : [];
+  const patches = dups.filter((x) => x.patch).map((x) => x.patch);
 
   // 연도별로 묶어서 보여주기
   const byYear = useMemo(() => {
@@ -152,19 +153,28 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
               </div>
               <p className="help" style={{ margin: '10px 0 0' }}>
                 그 외 항공사 {fmtNum(res.skipped.other)}편{res.skipped.canceled ? `, 결항 ${res.skipped.canceled}편` : ''}은 뺐어요.
-                {dupCount > 0 && ` 이미 앱에 있는 같은 편명·날짜 ${dupCount}편은 체크를 풀어 뒀어요.`}
               </p>
             </div>
             <BaseCheck profile={profile} onSettings={onSettings} />
-            {patches.length > 0 && (
-              <label className={`imp-row fill-old ${fillOld ? 'on' : ''}`} style={{ marginTop: 10 }}>
-                <input type="checkbox" checked={fillOld} onChange={() => setFillOld((v) => !v)} />
-                <span className="ck">{fillOld && <Icon name="check" size={12} stroke={3} />}</span>
-                <span className="mid" style={{ gridColumn: '3 / -1' }}>
-                  <span className="t">이미 있는 항공편 {patches.length}편에 기종 채우기</span>
-                  <span className="s">앱에 있던 항공편은 그대로 두고, 비어 있는 기종·기체 번호만 CSV 값으로 넣어요.</span>
-                </span>
-              </label>
+            {dups.length > 0 && (
+              <div className="notice info" style={{ marginTop: 10 }}>
+                <b>앱에 이미 있는 항공편 {dups.length}편을 찾았어요</b> (같은 편명·같은 날짜)
+                <p style={{ margin: '4px 0 0' }}>
+                  이 항공편은 새로 추가하지 않아요. 직접 넣은 <b>적립률·운임·좌석 등급·메모는 그대로</b> 두고, <b>기종만</b> Flighty 정보로 반영해요.
+                </p>
+                <p style={{ margin: '4px 0 0' }} className="num">기종 반영 {patches.length}편 · 이미 같은 기종 {dups.length - patches.length}편</p>
+                <button className="link" style={{ marginTop: 6 }} onClick={() => setShowDup((v) => !v)}>{showDup ? '접기' : '어떤 항공편인지 보기'}</button>
+                {showDup && (
+                  <div className="dup-list num">
+                    {dups.map((x) => (
+                      <div key={x.key}>
+                        <span>{x.flight.airline} {x.flight.flightNo} · {fmtDate(x.flight.date, { weekday: false })}</span>
+                        <span>{x.patch && x.patch.aircraft !== x.patch.was ? <>{x.patch.was || '기종 없음'} → <b>{x.patch.aircraft}</b></> : '그대로'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {beforeBase > 0 && (
               <div className="notice" style={{ marginTop: 10 }}>
@@ -174,7 +184,7 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
           </div>
 
           <div className="section-h">
-            <span>가져올 항공편 <span className="num">{chosen.length}</span>/{shown.length}</span>
+            <span>새로 추가할 항공편 <span className="num">{chosen.length}</span>/{shown.length}</span>
             <span style={{ display: 'flex', gap: 12 }}>
               <button className="link" onClick={() => setAll(true)}>모두 선택</button>
               <button className="link" onClick={() => setAll(false)}>모두 해제</button>
@@ -193,7 +203,7 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
                     <AirlineMark code={f.airline} size="sm" />
                     <span className="mid">
                       <span className="t">{findAirport(f.from)?.city || f.from} → {findAirport(f.to)?.city || f.to}</span>
-                      <span className="s num">{f.airline} {f.flightNo} · {fmtDate(f.date, { weekday: false })}{f.aircraft ? ` · ${f.aircraft}` : ''}{x.dup ? ' · 이미 있음' : ''}</span>
+                      <span className="s num">{f.airline} {f.flightNo} · {fmtDate(f.date, { weekday: false })}{f.aircraft ? ` · ${f.aircraft}` : ''}</span>
                     </span>
                     <span className="mi num">{f.baseMiles != null ? `+${fmtNum(earnedMiles(f))}` : '–'}</span>
                   </label>
@@ -201,13 +211,15 @@ export default function ImportFlighty({ ctx, onImport, onClose, onSettings }) {
               })}
             </div>
           ))}
+          {shown.length === 0 && <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>새로 추가할 항공편은 없어요. 모두 앱에 이미 있는 항공편이에요.</p>}
           <div className="sumbar">
             <div className="line num">
-              <span><b>{chosen.length}편</b> · 적립률 100% 기준 <b>{fmtNum(totalMi)}마일</b></span>
+              <span>새로 <b>{chosen.length}편</b> · 적립률 100% 기준 <b>{fmtNum(totalMi)}마일</b></span>
+              {patches.length > 0 && <span>기존 <b>{patches.length}편</b> 기종만 반영</span>}
             </div>
             {beforeBase > 0 && <div className="help" style={{ color: 'var(--warn)', margin: 0 }}>{beforeBase}편은 설정의 실적 숫자와 겹쳐 실적에 더하지 않아요.</div>}
-            <button className="btn primary block" disabled={!chosen.length && !(fillOld && patches.length)} onClick={() => onImport(chosen.map((x) => x.flight), fillOld ? patches : [])}>
-              {chosen.length ? `${chosen.length}편 추가` : ''}{chosen.length && fillOld && patches.length ? ' · ' : ''}{fillOld && patches.length ? `기종 ${patches.length}편 채우기` : ''}
+            <button className="btn primary block" disabled={!chosen.length && !patches.length} onClick={() => onImport(chosen.map((x) => x.flight), patches, dups.length)}>
+              {[chosen.length ? `${chosen.length}편 추가` : '', patches.length ? `기종 ${patches.length}편 반영` : ''].filter(Boolean).join(' · ') || '가져올 항공편 없음'}
             </button>
           </div>
         </>

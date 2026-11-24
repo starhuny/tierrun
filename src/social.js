@@ -11,6 +11,25 @@ export const inviteLink = (token) => `${location.origin}/?${INVITE_PARAM}=${toke
 const normNo = (n) => String(n || '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
 export const flightKey = (f) => `${String(f.airline || '').toUpperCase()}${normNo(f.flightNo)}|${f.date}`;
 
+// 탑승 완료 항공편으로 만든 비행 기록 요약 (친구와 비교용, 횟수만)
+export function flightStats(flights, today) {
+  const past = flights.filter((f) => f.date < today);
+  const tally = (keys) => {
+    const m = new Map();
+    for (const k of keys) if (k) m.set(k, (m.get(k) || 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  };
+  const al = tally(past.map((f) => String(f.airline || '').toUpperCase()));
+  const ap = tally(past.flatMap((f) => [f.from, f.to]));
+  const top = (arr, n = 3) => arr.slice(0, n).map(([code, count]) => ({ code, count }));
+  return {
+    flights: past.length,
+    dist: Math.round(past.reduce((a, f) => a + (+f.baseMiles || 0), 0)),
+    airlines: top(al), airlineCount: al.length,
+    airports: top(ap), airportCount: ap.length,
+  };
+}
+
 // 친구에게 보이는 것: 이름·사진, 현재 등급, 다음 등급 진행률, 다가오는 항공편(운임·메모·지난 항공편 제외)
 export function buildPublic({ profile, user, flights, goals, today }) {
   const h = goals?.headline;
@@ -36,6 +55,7 @@ export function buildPublic({ profile, user, flights, goals, today }) {
       : null,
     // 많이 탄 기종 순위(탑승 완료 기준, 횟수만)
     aircraft: aircraftTop(flights, today, 3),
+    stats: flightStats(flights, today),
     upcoming: sortFlights(flights)
       .filter((f) => f.date >= today)
       .slice(0, 40)

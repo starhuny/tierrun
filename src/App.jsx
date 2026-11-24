@@ -71,10 +71,10 @@ export default function App() {
   const loaded = useRef(false);
   const scrollRef = useRef(null);
 
-  const say = useCallback((t, undo) => {
+  const say = useCallback((t, undo, ms) => {
     setToast(undo ? { text: t, undo } : t);
     clearTimeout(say.t);
-    say.t = setTimeout(() => setToast(null), undo ? 5000 : 2600);
+    say.t = setTimeout(() => setToast(null), ms || (undo ? 5000 : 2600));
   }, []);
 
   const loadFrom = async (a) => {
@@ -273,7 +273,7 @@ export default function App() {
       setToast(null);
     });
   };
-  const importFlights = (fl, patches = []) => {
+  const importFlights = (fl, patches = [], dupCount = 0) => {
     const pm = new Map(patches.map((p) => [p.id, p]));
     setState((s) => {
       const trips2 = { ...s.trips };
@@ -283,7 +283,14 @@ export default function App() {
     });
     setStack(null);
     setTab('flights');
-    say([fl.length ? `${fl.length}편을 가져왔어요 · ${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일` : '', patches.length ? `기종 ${patches.length}편 채움` : ''].filter(Boolean).join(' · '));
+    say(
+      [
+        fl.length ? `새 항공편 ${fl.length}편을 추가했어요 (${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일)` : '',
+        dupCount ? `이미 있던 ${dupCount}편은 적립률은 그대로 두고 기종만 반영했어요` : '',
+      ].filter(Boolean).join(' · ') || '바뀐 내용이 없어요',
+      null,
+      6000,
+    );
   };
   const deleteTrip = (tripId) => {
     setState((s) => {

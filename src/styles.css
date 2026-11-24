@@ -500,3 +500,18 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .map-slide { position: relative; }
 .map-idx { position: absolute; left: 0; bottom: 12px; width: 86px; text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-3); pointer-events: none; }
 .map-count { display: none; }
+.dup-list { display: grid; gap: 4px; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: light-dark(rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0.2)); max-height: 260px; overflow: auto; }
+.dup-list div { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.toast { max-width: min(560px, calc(100vw - 32px)); white-space: normal; line-height: 1.45; }
+.toast { border-radius: 20px; }
+.cmp { display: grid; gap: 10px; }
+.cmp .card + .card { margin-top: 0; }
+.cmp-table { display: grid; grid-template-columns: 1fr auto auto; gap: 7px 16px; align-items: center; font-size: 14px; }
+.cmp-table .who { font-size: 12px; color: var(--ink-2); text-align: right; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-table .who.me { color: var(--sky-ink); }
+.cmp-table > span:not(.k) { text-align: right; color: var(--ink-2); }
+.cmp-table .k { color: var(--ink-2); font-size: 13px; }
+.cmp-table .win { color: var(--ink) !important; font-weight: 800; }
+.rk-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.rk-name b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rk-name .faint { font-size: 12px; }

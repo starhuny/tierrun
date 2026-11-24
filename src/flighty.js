@@ -1,7 +1,7 @@
 // Flighty 앱에서 내보낸 CSV(FlightyExport-YYYY-MM-DD.csv) 읽기
 // 대한항공·스카이팀·아시아나 항공편만 골라 티어런 항공편으로 바꿈 (적립률은 모두 100%)
 import { baseMilesFor, defaultCredit, uid } from './core.js';
-import { normAircraft } from './aircraft.js';
+import { normAircraft, isKnownAircraft } from './aircraft.js';
 
 // Flighty는 항공사를 ICAO 3자리로 적음 → IATA 2자리
 export const ICAO_TO_IATA = {
@@ -83,9 +83,15 @@ export function readFlighty(text, existing = []) {
     };
     const group = code === 'KE' ? 'KE' : code === 'OZ' ? 'OZ' : 'ST';
     const old = have.get(`${code}|${flightNo}|${date}`);
-    // 이미 있는 항공편인데 기종이 비어 있으면 채워 줄 수 있게
-    const patch = old && ((!old.aircraft && flight.aircraft) || (!old.reg && flight.reg)) ? { id: old.id, aircraft: old.aircraft || flight.aircraft, reg: old.reg || flight.reg } : null;
-    out.push({ key: id, group, flight, dup: !!old, patch });
+    // 이미 있는 항공편: 적립률·운임·좌석 등급 등은 그대로 두고 기종(·비어 있으면 기체 번호)만 Flighty 값으로
+    let patch = null;
+    if (old) {
+      const want = flight.aircraft;
+      const needAc = !!want && (!old.aircraft || (isKnownAircraft(want) && old.aircraft !== want));
+      const needReg = !!flight.reg && !old.reg;
+      if (needAc || needReg) patch = { id: old.id, aircraft: needAc ? want : old.aircraft || '', reg: needReg ? flight.reg : old.reg || '', was: old.aircraft || '' };
+    }
+    out.push({ key: id, group, flight, dup: !!old, patch, old: old ? { aircraft: old.aircraft || '' } : null });
   }
   out.sort((x, y) => (x.flight.date + x.flight.dep).localeCompare(y.flight.date + y.flight.dep));
   return { rows: out, total: rows.length - 1, skipped: { other, canceled } };
