@@ -51,11 +51,25 @@ export default async function handler(req, res) {
   // 한국은 한글 이름 그대로, 그 밖은 영어 이름 우선
   const lang = cc === 'KR' ? '' : 'en';
   const qs = [...QUERIES, ...(LOCAL[cc] || [])];
-  const results = await Promise.allSettled(qs.map((q) => photon(q, bbox, lang)));
-  const ok = results.filter((r) => r.status === 'fulfilled');
+  // 공개 서버라 한 번에 몰아 보내지 않고 4개씩, 실패한 건 한 번 더
+  const t0 = Date.now();
+  const results = new Array(qs.length);
+  const run = async (i) => {
+    for (let k = 0; k < 2; k++) {
+      try { results[i] = { status: 'fulfilled', value: await photon(qs[i], bbox, lang) }; return; } catch (e) {
+        results[i] = { status: 'rejected', reason: e };
+        if (Date.now() - t0 > 12000) return;
+        await new Promise((r) => setTimeout(r, 700));
+      }
+    }
+  };
+  let next = 0;
+  await Promise.all(Array.from({ length: 4 }, async () => { while (next < qs.length && Date.now() - t0 < 15000) await run(next++); }));
+  const ok = results.filter((r) => r?.status === 'fulfilled');
+  const failed = qs.filter((_, i) => results[i]?.status !== 'fulfilled');
   if (!ok.length) {
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ hotels: [], error: '호텔 목록을 가져오지 못했어요.', detail: results.map((r) => String(r.reason?.message || r.reason || '')).slice(0, 3) });
+    return res.status(200).json({ hotels: [], error: '호텔 목록을 가져오지 못했어요.', detail: results.filter(Boolean).map((r) => String(r.reason?.message || r.reason || '')).slice(0, 3) });
   }
   const seen = new Map();
   for (const r of ok) {
@@ -78,6 +92,7 @@ export default async function handler(req, res) {
     if (keep.some((k) => norm(k.name) === norm(h.name) || (k.brand === h.brand && km(k.lat, k.lon, h.lat, h.lon) < 0.15))) continue;
     keep.push(h);
   }
-  res.setHeader('Cache-Control', keep.length ? 's-maxage=604800, stale-while-revalidate=1209600' : 's-maxage=86400');
-  return res.status(200).json({ hotels: keep.slice(0, 200), source: 'OpenStreetMap (Photon)', partial: ok.length < results.length });
+  const partial = failed.length > 0;
+  res.setHeader('Cache-Control', partial ? 's-maxage=600' : keep.length ? 's-maxage=604800, stale-while-revalidate=1209600' : 's-maxage=86400');
+  return res.status(200).json({ hotels: keep.slice(0, 200), source: 'OpenStreetMap (Photon)', partial, failed, ms: Date.now() - t0 });
 }
