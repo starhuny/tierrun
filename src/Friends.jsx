@@ -40,7 +40,11 @@ function acInfo(w) {
   const byN = !!(nt && w.nextNights) && an >= ap;
   const remN = nt && w.nextNights ? Math.max(0, w.nextNights - w.nights) : null;
   const remP = nt ? Math.max(0, w.nextPoints - w.points) : 0;
-  return { at, nt, conf: byN ? pn : pp, all: byN ? an : ap, label: w.goal || nt?.name || '', rem: nt ? (remN != null ? `${fmtNum(remN)}박 또는 ${fmtNum(remP)}P` : `${fmtNum(remP)}P`) : '' };
+  // 그 해 등급을 이미 땄으면(포인트로만 가는 다이아몬드는 '도전') 달성 표시가 먼저
+  const ach = w.earned ? AC_TIER[w.earned] : null;
+  const stretch = !!(ach && nt && !w.nextNights);
+  const done = !!ach && (stretch || !nt);
+  return { at, nt, ach, stretch, done, conf: done ? 1 : byN ? pn : pp, all: done ? 1 : byN ? an : ap, label: w.goal || nt?.name || '', rem: nt ? (remN != null ? `${fmtNum(remN)}박 또는 ${fmtNum(remP)}P` : `${fmtNum(remP)}P`) : '' };
 }
 function AcChip({ w }) {
   const at = AC_TIER[w.tier];
@@ -87,7 +91,12 @@ export function FriendRow({ fr, ctx, onClick, right }) {
             <span className="fr-sub">아직 티어런 정보가 올라오지 않았어요</span>
           ) : orderOf(fr)[0] === 'ALL' ? (() => {
             const x = acInfo(acOf(fr));
-            return x.nt ? (
+            return x.ach ? (
+              <>
+                <span className="fr-sub num">아코르 <b>{acOf(fr).year} {x.ach.name} 달성</b>{x.done ? '' : ` · ${x.label}까지 ${x.rem}`}</span>
+                <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} thin done={x.done} />
+              </>
+            ) : x.nt ? (
               <>
                 <span className="fr-sub num">아코르 {x.label}까지 <b>{pct(x.conf)}</b> · {x.rem} 남음</span>
                 <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} thin />
@@ -316,7 +325,7 @@ export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
                     <CardFace
                       bg={x.at.bg} ink={x.at.ink} en="ACCOR · ALL" title={x.at.en} airline="ALL"
                       sub={w.validUntil ? `${fmtDot(w.validUntil)}까지` : '호텔'}
-                      foot={<div className="wline"><span>{fr.name}</span><span>{w.year} · {fmtNum(w.nights)}박 · {fmtNum(w.points)}P</span></div>}
+                      foot={<div className="wline">{x.ach ? <b>✓ {w.year} {x.ach.name} 달성</b> : <span>{fr.name}</span>}<span>{w.year} · {fmtNum(w.nights)}박 · {fmtNum(w.points)}P</span></div>}
                       conf={x.conf} plan={Math.max(0, x.all - x.conf)}
                     />
                   </div>
@@ -324,11 +333,11 @@ export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
                 <div className="pad" style={{ marginTop: i === 0 ? 12 : 10 }}>
                   <div className="card">
                     <div className="card-h">
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="ALL" size="xs" />{i === 0 && x.nt ? `${x.label}까지` : '아코르 ALL'}</span>
-                      {i === 0 ? <b className="num" style={{ color: 'var(--ink)', fontSize: 18 }}>{x.nt ? pct(x.conf) : '달성'}</b> : <AcChip w={w} />}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="ALL" size="xs" />{i === 0 ? (x.ach ? `${w.year} ${x.ach.name} 달성` : x.nt ? `${x.label}까지` : '아코르 ALL') : '아코르 ALL'}</span>
+                      {i === 0 ? <b className="num" style={{ color: 'var(--ink)', fontSize: 18 }}>{x.done || !x.nt ? '✓' : pct(x.conf)}</b> : <AcChip w={w} />}
                     </div>
-                    <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} done={!x.nt} />
-                    <div className="help num" style={{ marginTop: 8 }}>{w.year}년 {fmtNum(w.nights)}박 · {fmtNum(w.points)}P{x.nt ? ` · ${x.label}까지 ${x.rem} 남음` : ' · 최고 등급 달성'}</div>
+                    <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} done={x.done || !x.nt} />
+                    <div className="help num" style={{ marginTop: 8 }}>{w.year}년 {fmtNum(w.nights)}박 · {fmtNum(w.points)}P{x.ach ? ` · ${x.ach.name} 달성${x.done ? (x.stretch ? ` · ${x.nt.name}는 포인트로만 (${x.rem} 남음)` : '') : ` · ${x.label}까지 ${x.rem}`}` : x.nt ? ` · ${x.label}까지 ${x.rem} 남음` : ' · 최고 등급 달성'}</div>
                   </div>
                 </div>
               </Fragment>

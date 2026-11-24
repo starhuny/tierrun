@@ -165,10 +165,11 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
       const isSel = pin.id === sel;
       ctx.globalAlpha = sel && !isSel ? 0.35 : 1;
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x - 4, y - 4, 8, 8, 2.5) : ctx.rect(x - 4, y - 4, 8, 8);
+      const hs = isSel ? 7 : 5.5;
+      ctx.roundRect ? ctx.roundRect(x - hs / 2, y - hs / 2, hs, hs, 1.8) : ctx.rect(x - hs / 2, y - hs / 2, hs, hs);
       ctx.fillStyle = col.hotel;
       ctx.fill();
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.2;
       ctx.strokeStyle = col.halo;
       ctx.stroke();
       ctx.globalAlpha = 1;

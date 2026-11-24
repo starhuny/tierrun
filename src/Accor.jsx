@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCities, searchCities } from './cities.js';
+import { fetchHotels, filterHotels } from './hotels.js';
+import { detectBrand } from './brands.js';
+import { AC_BENEFITS, AC_EXTRAS, AC_BENEFITS_CHECKED } from './accorBenefits.js';
 import { findAirport } from './airports.js';
 import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid, addDays } from './core.js';
 import {
-  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2,
+  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2,
 } from './accor.js';
 import { Icon, AirlineMark, Bar, Seg, NumInput, WonInput, DateInput, AirportInput, Ring, CardFace } from './ui.jsx';
 
@@ -58,6 +61,86 @@ function CityInput({ value, onPick }) {
 }
 const thisYear = (today) => +today.slice(0, 4);
 
+// 도시 주변 아코르 호텔 고르기 (이름 입력칸 겸 검색)
+function HotelPicker({ s, set, onTypeName }) {
+  const cLat = s.cityLat ?? s.lat, cLon = s.cityLon ?? s.lon;
+  const has = cLat != null && cLon != null;
+  const [st, setSt] = useState({ k: '', list: null, err: false });
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState(false);
+  const [brand, setBrand] = useState('');
+  const k = has ? `${(+cLat).toFixed(2)},${(+cLon).toFixed(2)}` : '';
+  useEffect(() => {
+    if (!k || st.k === k) return;
+    let live = true;
+    setSt({ k, list: null, err: false });
+    fetchHotels(cLat, cLon).then((list) => live && setSt({ k, list, err: false })).catch(() => live && setSt({ k, list: [], err: true }));
+    return () => { live = false; };
+  }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 도시를 새로 고르면 목록을 펼침
+  const prevK = useRef(k);
+  useEffect(() => { if (k && prevK.current !== k && !s.hotelId) setOpen(true); prevK.current = k; }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = st.list || [];
+  const brands = useMemo(() => {
+    const m = new Map();
+    for (const h of list) m.set(h.brand, (m.get(h.brand) || 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [list]);
+  const shown = filterHotels(list, typed ? s.hotel : '', brand);
+  const pick = (h) => {
+    set({ hotel: h.name, hotelEn: h.nameEn || '', brand: h.brand, lat: h.lat, lon: h.lon, hotelId: h.id });
+    setTyped(false); setOpen(false); setBrand('');
+  };
+  const sel = s.hotelId ? list.find((h) => h.id === s.hotelId) : null;
+  return (
+    <div className="field">
+      <span>호텔</span>
+      <input
+        className="input"
+        value={s.hotel}
+        placeholder={has ? '목록에서 고르거나 이름 입력' : '예: 노보텔 앰배서더 서울 동대문'}
+        onFocus={() => has && setOpen(true)}
+        onChange={(e) => { onTypeName(e.target.value); setTyped(true); if (has) setOpen(true); }}
+      />
+      {!has && <div className="help" style={{ margin: 0 }}>도시를 먼저 고르면 그 도시의 아코르 호텔 목록이 떠요.</div>}
+      {has && !open && (
+        <button type="button" className="hpicked" onClick={() => setOpen(true)}>
+          {s.hotelId ? <span><b>{s.brand}</b>{sel ? ` · 도심에서 ${sel.km}km` : ''} · 지도에 호텔 위치로 표시</span> : <span>{s.cityName || '이 도시'} 아코르 호텔 목록 보기</span>}
+          <small>{s.hotelId ? '다른 호텔' : '열기'}</small>
+        </button>
+      )}
+      {has && open && (
+        <div className="hlist">
+          <div className="hlist-h">
+            <span>{st.list == null ? '호텔 목록 불러오는 중…' : st.err ? '목록을 불러오지 못했어요' : `${s.cityName || '이 도시'} 아코르 호텔 ${list.length}곳 · 가까운 순`}</span>
+            <button type="button" className="lnk" onClick={() => setOpen(false)}>닫기</button>
+          </div>
+          {brands.length > 1 && (
+            <div className="hchips">
+              <button type="button" className={!brand ? 'on' : ''} onClick={() => setBrand('')}>전체</button>
+              {brands.map(([b, n]) => <button type="button" key={b} className={brand === b ? 'on' : ''} onClick={() => setBrand(brand === b ? '' : b)}>{b} <small>{n}</small></button>)}
+            </div>
+          )}
+          <div className="hrows">
+            {shown.map((h) => (
+              <button type="button" key={h.id} className={`hrow${s.hotelId === h.id ? ' on' : ''}`} onClick={() => pick(h)}>
+                <span className="hb">{h.brand.replace(/^ibis /, 'ibis\u00a0')}</span>
+                <span className="hn"><b>{h.name}</b><small>{h.nameEn ? `${h.nameEn} · ` : ''}{h.km}km</small></span>
+              </button>
+            ))}
+            {st.list != null && !shown.length && (
+              <p className="help" style={{ margin: '6px 4px' }}>
+                {st.err ? '이름을 직접 넣어 주세요. 브랜드는 이름에서 알아서 골라요.' : list.length ? `‘${s.hotel}’와 맞는 호텔이 없어요. 적은 이름 그대로 저장돼요.` : '이 도시에서 찾은 아코르 호텔이 없어요. 이름을 직접 넣어 주세요.'}
+              </p>
+            )}
+          </div>
+          <div className="hlist-f">OpenStreetMap 기준이라 새로 연 호텔은 빠져 있을 수 있어요.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ───────── 카드 ───────── */
 export function acFace(prog, stays, today) {
   const s = acSummary(prog, stays, today, undefined, prog?.eur);
@@ -65,8 +148,12 @@ export function acFace(prog, stays, today) {
   return {
     bg: t.bg, ink: t.ink, en: 'ACCOR · ALL', title: t.en, airline: 'ALL',
     sub: prog?.validUntil ? `${fmtDot(prog.validUntil)}까지` : '호텔',
-    foot: <div className="wline"><b>{s.next ? `${s.goal}까지 ${remText(s)}` : `${s.year}년 최고 등급`}</b><span>{s.year} · {fmtNum(s.conf.nights)}박 · {fmtNum(s.conf.points)}P</span></div>,
-    conf: s.conf01, plan: Math.max(0, s.all01 - s.conf01),
+    foot: s.achieved ? (
+      <div className="wline"><b>✓ {s.year} {s.achieved.name} 달성</b><span>{s.next && !s.stretch ? `${s.next.name}까지 ${remText(s)}` : `${fmtNum(s.conf.nights)}박 · ${fmtNum(s.conf.points)}P`}</span></div>
+    ) : (
+      <div className="wline"><b>{s.next ? `${s.goal}까지 ${remText(s)}` : `${s.year}년 최고 등급`}</b><span>{s.year} · {fmtNum(s.conf.nights)}박 · {fmtNum(s.conf.points)}P</span></div>
+    ),
+    conf: s.achieved && (s.stretch || !s.next) ? 1 : s.conf01, plan: s.achieved && (s.stretch || !s.next) ? 0 : Math.max(0, s.all01 - s.conf01),
   };
 }
 
@@ -76,11 +163,11 @@ export function AcStrip({ prog, ctx, onClick }) {
   return (
     <button className="strip ac" onClick={onClick} aria-label="아코르 등급 보기">
       <div>
-        <div className="t"><AirlineMark code="ALL" size="xs" />아코르 {s.held.name}{s.next ? (s.keep ? ' · 유지' : ` → ${s.next.name}`) : ''}</div>
-        <div className="v num">{s.next ? `${remText(s)} 남음` : '달성했어요'}</div>
+        <div className="t"><AirlineMark code="ALL" size="xs" />{s.achieved ? `아코르 ${s.year} ${s.achieved.name} 달성` : `아코르 ${s.held.name}${s.next ? (s.keep ? ' · 유지' : ` → ${s.next.name}`) : ''}`}</div>
+        <div className="v num">{s.achieved ? (s.next && !s.stretch ? `${s.next.name}까지 ${remText(s)}` : `${fmtDot(s.validUntil)}까지 유지`) : s.next ? `${remText(s)} 남음` : '달성했어요'}</div>
       </div>
-      <div className="num" style={{ fontWeight: 800, fontSize: 18 }}>{Math.floor(s.conf01 * 100)}%</div>
-      <Bar conf={s.conf01} plan={Math.max(0, s.all01 - s.conf01)} thin />
+      <div className="num" style={{ fontWeight: 800, fontSize: 18 }}>{s.achieved && (s.stretch || !s.next) ? '✓' : `${Math.floor(s.conf01 * 100)}%`}</div>
+      <Bar conf={s.achieved && (s.stretch || !s.next) ? 1 : s.conf01} plan={s.achieved && (s.stretch || !s.next) ? 0 : Math.max(0, s.all01 - s.conf01)} thin done={!!s.achieved} />
     </button>
   );
 }
@@ -249,6 +336,7 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
   const [s, setS] = useState(() => ({ ...blankStay(), ...(initial || {}) }));
   const [tried, setTried] = useState(false);
   const [del, setDel] = useState(false);
+  const [brandTouched, setBrandTouched] = useState(!!initial?.id);
   const set = (p) => setS((x) => ({ ...x, ...p }));
   const n = stayNights({ ...s, nightsOverride: null });
   const p = stayPoints({ ...s, pointsOverride: null }, ctx.acProg?.eur);
@@ -267,11 +355,12 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
       </div>
       <div className="form">
         <div className="segcard">
-          <label className="field"><span>호텔 이름</span><input className="input" value={s.hotel} placeholder="예: 노보텔 앰배서더 서울 동대문" onChange={(e) => set({ hotel: e.target.value })} /></label>
+          <CityInput value={stayPlace(s)} onPick={(c) => set({ cityName: c.ko, cityEn: c.en, cc: c.cc, lat: c.lat, lon: c.lon, cityLat: c.lat, cityLon: c.lon, city: '', hotelId: null })} />
+          <HotelPicker s={s} set={set} onTypeName={(v) => set({ hotel: v, hotelId: null, ...(brandTouched ? {} : { brand: detectBrand(v) || s.brand }), ...(s.hotelId && s.cityLat != null ? { lat: s.cityLat, lon: s.cityLon } : {}) })} />
           {tried && !s.hotel.trim() && <div className="err-t">호텔 이름을 넣어 주세요.</div>}
           <label className="field">
-            <span>브랜드 <span className="faint">(10유로당 등급 포인트)</span></span>
-            <select className="input" value={s.brand} onChange={(e) => set({ brand: e.target.value })}>
+            <span>브랜드 <span className="faint">(10유로당 등급 포인트{!brandTouched && s.hotel ? ' · 이름으로 자동 선택' : ''})</span></span>
+            <select className="input" value={s.brand} onChange={(e) => { setBrandTouched(true); set({ brand: e.target.value }); }}>
               {BRAND_GROUPS.map(([g, r, list]) => (
                 <optgroup key={g} label={`${g} · ${r}P`}>
                   {list.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -279,7 +368,6 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
               ))}
             </select>
           </label>
-          <CityInput value={stayPlace(s)} onPick={(c) => set({ cityName: c.ko, cityEn: c.en, cc: c.cc, lat: c.lat, lon: c.lon, city: '' })} />
           <div className="row2">
             <label className="field"><span>체크인</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: v && !(s.checkOut > v) ? addDays(v, 1) : s.checkOut })} invalid={tried && !s.checkIn} /></label>
             <label className="field"><span>체크아웃</span><DateInput value={s.checkOut} onChange={(v) => set({ checkOut: v })} invalid={tried && !(s.checkOut > s.checkIn)} /></label>
@@ -327,14 +415,30 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
       <div className="pad" style={{ paddingTop: 6 }}><CardFace {...acFace(prog, stays, today)} /></div>
       <div className="pad" style={{ marginTop: 12, display: 'grid', gap: 8 }}>
         <Seg small light options={[yr0, yr0 + 1].map((y) => [y, `${y}년`])} value={yr} onChange={setYr} />
-        <Seg small options={[['prog', '진행'], ['combo', '보너스 조합'], ['stays', '숙박']]} value={tab} onChange={setTab} />
+        <Seg small options={[['prog', '진행'], ['combo', '보너스 조합'], ['stays', '숙박'], ['perks', '혜택']]} value={tab} onChange={setTab} />
       </div>
 
       {tab === 'prog' && (
         <>
+          {s.achieved && (
+            <div className="pad" style={{ marginTop: 14 }}>
+              <div className="achv" style={{ background: s.achieved.bg, color: s.achieved.ink }}>
+                <span className="achv-ic"><Icon name="check" size={22} /></span>
+                <div>
+                  <div className="k">{yr}년 실적 · 확정</div>
+                  <h3>{s.achieved.name} 달성</h3>
+                  <div className="achv-n num">{fmtNum(s.conf.nights)}박{s.plan.nights ? ` (+예정 ${fmtNum(s.plan.nights)})` : ''} · {fmtNum(s.conf.points)}P{s.plan.points ? ` (+예정 ${fmtNum(s.plan.points)})` : ''}</div>
+                  <p className="num">{fmtDot(s.validUntil)}까지 {s.achieved.name}{s.achieved.id === s.held.id ? ' 유지' : ''}예요.{s.achieved.nights != null ? ` ${yr + 1}년에 ${s.achieved.nights}박 또는 ${fmtNum(s.achieved.points)}P를 채우면 ${yr + 2}.12.31까지 이어져요.` : ''}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          {s.stretch && <DiamondCard s={s} eur={prog.eur} />}
+          {!s.stretch && (nt || !s.achieved) && (<>
           <div className="goal">
-            <h3>{nt ? `${s.goal}까지` : '최고 등급 달성'}</h3>
+            <h3>{nt ? (s.achieved ? `다음 목표 · ${nt.name}까지` : `${s.goal}까지`) : '최고 등급 달성'}</h3>
             <div className="scope">{yr}.01.01 ~ {yr}.12.31{dleft >= 0 && yr === yr0 ? ` · D-${dleft}` : ''} · 딴 등급은 {fmtDot(s.validUntil)}까지</div>
+            {s.achievedPlan && <div className="notice" style={{ margin: '10px 0 0' }}>예정된 숙박·보너스 박까지 마치면 <b>{s.achievedPlan.name} 달성</b>이에요.</div>}
             <div className="ringwrap">
               <Ring conf={s.conf01} all={s.all01}>
                 <b className="num">{Math.floor(s.conf01 * 1000) / 10}%</b>
@@ -362,6 +466,7 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
               </div>
             </div>
           )}
+          </>)}
           <div className="tiles num" style={{ marginTop: 10 }}>
             <div className="tile"><div className="k">{nt ? `${s.goal}까지` : '다음 등급'}</div><div className="v" style={{ fontSize: 16 }}>{nt ? remText(s) : '–'}</div><div className="s">{nt ? `예정 포함 ${remText(s, true)}` : '최고 등급'}</div></div>
             <div className="tile"><div className="k">{yr}년 실적으로</div><div className="v">{s.earnedPlan.name}</div><div className="s">예정 포함 · {fmtDot(s.validUntil)}까지</div></div>
@@ -375,10 +480,82 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
       )}
 
       {tab === 'combo' && <ComboTab prog={prog} s={s} yr={yr} />}
+      {tab === 'perks' && <PerksTab held={s.held} />}
       {tab === 'stays' && (
         <StayList rows={[...stays].sort((a, b) => stayDate(b).localeCompare(stayDate(a))).map((x) => ({ s: x }))} ctx={ctx} title="전체 숙박" onOpen={onOpenStay} onAdd={onAddStay} />
       )}
       {footer}
+    </div>
+  );
+}
+
+// 등급별 혜택
+function PerksTab({ held }) {
+  const [tid, setTid] = useState(held.id);
+  const [more, setMore] = useState(false);
+  const t = AC_TIER[tid];
+  const ix = (id) => AC_TIERS.findIndex((x) => x.id === id);
+  const has = (b) => ix(b.from) <= ix(tid);
+  const val = (b) => b.v?.[tid] || (b.v ? Object.entries(b.v).filter(([k]) => ix(k) <= ix(tid)).pop()?.[1] : '');
+  const isNew = (b) => tid !== 'CLASSIC' && (b.from === tid || (b.v && b.v[tid] && b.v[tid] !== b.v[AC_TIERS[ix(tid) - 1]?.id]));
+  const mine = AC_BENEFITS.filter(has), later = AC_BENEFITS.filter((b) => !has(b));
+  const row = (b, on) => (
+    <div key={b.t} className={`perk${on ? '' : ' off'}`}>
+      <span className="perk-ic">{on ? <Icon name="check" size={14} /> : null}</span>
+      <div>
+        <div className="perk-t"><b>{b.t}</b>{on && val(b) ? <span className="perk-v">{val(b)}</span> : null}{on && isNew(b) ? <span className="badge">NEW</span> : null}{!on ? <span className="perk-from">{AC_TIER[b.from].name}부터</span> : null}</div>
+        {b.d && <div className="perk-d">{b.d}</div>}
+      </div>
+    </div>
+  );
+  return (
+    <div className="pad" style={{ marginTop: 14 }}>
+      <div className="perk-tiers">
+        {AC_TIERS.map((x) => (
+          <button key={x.id} type="button" className={tid === x.id ? 'on' : ''} style={{ background: x.bg, color: x.ink }} onClick={() => setTid(x.id)} aria-pressed={tid === x.id}>
+            <span>{x.en}</span>{x.id === held.id && <small>내 등급</small>}
+          </button>
+        ))}
+      </div>
+      <div className="card" style={{ marginTop: 10 }}>
+        <div className="card-h"><span>{t.name} 혜택 {mine.length}가지</span><span className="faint num">{t.nights != null ? `${t.nights}박 또는 ` : ''}{t.points ? `${fmtNum(t.points)}P` : '가입'}</span></div>
+        <div className="perks">{mine.map((b) => row(b, true))}</div>
+      </div>
+      {later.length > 0 && (
+        <div className="card" style={{ marginTop: 10 }}>
+          <div className="card-h"><span>위 등급에서 생기는 혜택</span></div>
+          <div className="perks">{later.map((b) => row(b, false))}</div>
+        </div>
+      )}
+      <button className="btn sm ghost block" style={{ marginTop: 10 }} onClick={() => setMore((m) => !m)}>{more ? '브랜드·제휴 혜택 접기' : '브랜드·제휴 혜택 더 보기'}</button>
+      {more && (
+        <div className="card" style={{ marginTop: 10 }}>
+          <div className="perks">{AC_EXTRAS.map((b) => row(b, has(b)))}</div>
+        </div>
+      )}
+      <p className="basis" style={{ padding: '12px 4px' }}>아코르 공식 '회원 등급별 제공 혜택' 기준({AC_BENEFITS_CHECKED} 확인)이에요. 대부분 호텔 사정(객실 상황)에 따라 달라지고, 브랜드·지역별 예외가 있어요. 정확한 조건은 ALL 앱에서 확인해 주세요.</p>
+    </div>
+  );
+}
+
+// 다이아몬드: 포인트로만 가는 '도전' 목표
+const manwon = (krw) => `약 ${fmtNum(Math.round(krw / 10000))}만 원`;
+function DiamondCard({ s, eur }) {
+  const nt = s.next;
+  const c = pointsCost(s.remP, eur);
+  const cp = pointsCost(s.remPPlan, eur);
+  return (
+    <div className="pad" style={{ marginTop: 12 }}>
+      <div className="card">
+        <div className="card-h"><span>{nt.name} 도전</span><span className="badge gray">등급 포인트로만</span></div>
+        <Bar conf={Math.min(1, s.conf.points / nt.points)} plan={Math.max(0, Math.min(1, s.all.points / nt.points) - Math.min(1, s.conf.points / nt.points))} done={s.conf.points >= nt.points} />
+        <div className="pl num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 8 }}><span className="muted">{fmtNum(s.conf.points)}{s.plan.points ? ` +${fmtNum(s.plan.points)}` : ''} / {fmtNum(nt.points)}P</span><b>{fmtNum(s.remP)}P 남음</b></div>
+        <p className="help" style={{ margin: '8px 0 0' }}>
+          {s.remP > 0
+            ? <>박수로는 갈 수 없고, 보통 브랜드(10유로당 25P) 기준 <b>€{fmtNum(c.eur)} · {manwon(c.krw)}</b>을 더 묵어야 해요.{s.plan.points ? ` 예정 숙박까지 넣으면 약 ${manwon(cp.krw)} 남아요.` : ''}</>
+            : '다이아몬드 포인트를 채웠어요.'}
+        </p>
+      </div>
     </div>
   );
 }

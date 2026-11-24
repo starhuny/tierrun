@@ -63,7 +63,7 @@ export function buildPublic({ profile, user, flights, goals, today, stays = [] }
     wallet: walletOf(profile).filter((w) => w.program !== 'KE').map((w) => {
       if (w.program === 'ALL') {
         const a = acSummary(w, stays, today, undefined, w.eur);
-        return { program: 'ALL', tier: a.held.id, year: a.year, nights: a.conf.nights, points: a.conf.points, allNights: a.all.nights, allPoints: a.all.points, next: a.next?.id || null, nextNights: a.next?.nights ?? null, nextPoints: a.next?.points || null, goal: a.goal || '', validUntil: w.validUntil || '' };
+        return { program: 'ALL', tier: a.held.id, year: a.year, nights: a.conf.nights, points: a.conf.points, allNights: a.all.nights, allPoints: a.all.points, next: a.next?.id || null, nextNights: a.next?.nights ?? null, nextPoints: a.next?.points || null, goal: a.goal || '', validUntil: w.validUntil || '', earned: a.achieved?.id || null };
       }
       if (w.program !== 'AS') return { program: w.program };
       const x = asSummary(w, flights, today);

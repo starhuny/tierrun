@@ -114,13 +114,25 @@ export function acSummary(prog, stays, today, yr = year(today), eur) {
   const pctNA = next?.nights ? Math.min(1, y.all.nights / next.nights) : 0;
   const pctPA = next ? Math.min(1, y.all.points / next.points) : 1;
   const byNights = next?.nights != null && pctNA >= pctPA;
+  // 그 해 실적으로 딴 등급 (지금 등급 이상일 때만 '달성'으로 봄)
+  const ix = (t) => AC_TIERS.indexOf(t);
+  const achieved = earned.id !== 'CLASSIC' && ix(earned) >= ix(held) ? earned : null;
+  const achievedPlan = !achieved && earnedPlan.id !== 'CLASSIC' && ix(earnedPlan) >= ix(held) ? earnedPlan : null;
+  // 다이아몬드처럼 포인트로만 가는 목표는 '도전'으로 따로
+  const stretch = !!(achieved && next && next.nights == null);
   return {
-    ...y, held, earned, earnedPlan, next, keep,
+    ...y, held, earned, earnedPlan, next, keep, achieved, achievedPlan, stretch,
     goal: next ? (keep ? `${next.name} 유지` : next.name) : '',
     remN, remP, remNPlan, remPPlan,
     conf01: byNights ? pctN : pctP, all01: byNights ? pctNA : pctPA, byNights,
     deadline: `${yr}-12-31`, validUntil: `${yr + 1}-12-31`,
   };
+}
+
+// 남은 등급 포인트를 채우려면 대략 얼마를 써야 하나 (대부분 브랜드: 10유로당 25P)
+export function pointsCost(remP, eur = DEFAULT_EUR) {
+  const e = (remP / 25) * 10;
+  return { eur: Math.round(e), krw: Math.round((e * (+eur || DEFAULT_EUR)) / 10000) * 10000 };
 }
 
 // 남은 양 문구: "12박 또는 520P"
