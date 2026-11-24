@@ -3,7 +3,7 @@ import { loadCities, searchCities } from './cities.js';
 import { findAirport } from './airports.js';
 import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid, addDays } from './core.js';
 import {
-  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents,
+  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2,
 } from './accor.js';
 import { Icon, AirlineMark, Bar, Seg, NumInput, WonInput, DateInput, AirportInput, Ring, CardFace } from './ui.jsx';
 
@@ -86,6 +86,11 @@ export function AcStrip({ prog, ctx, onClick }) {
 }
 
 /* ───────── 티어 추가·수정 ───────── */
+const FAST_PRESETS = [
+  { btn: '패스트트랙 (+9박)', label: '패스트트랙 (1+9)', nights: 9 },
+  { btn: '플라잉블루 1+1', label: '플라잉블루 이벤트 (1+1)', nights: null },
+  { btn: '직접 입력', label: '', nights: null },
+];
 export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
   const yr = thisYear(ctx.today);
   const editing = !!entry;
@@ -94,8 +99,14 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
   const [nights, setNights] = useState(entry?.nights ?? null);
   const [points, setPoints] = useState(entry?.points ?? null);
   const [explorer, setExplorer] = useState(!!entry?.explorer);
-  const [explorerDate, setExplorerDate] = useState(entry?.explorerDate || '');
+  const legacy = !!entry && !isV2(entry);
+  // 예전 입력은 '다음 갱신일'이었으니 미래 날짜면 1년 전(최근 갱신일)으로 바꿔 보여 줌
+  const [explorerDate, setExplorerDate] = useState(() => {
+    const d = entry?.explorerDate || '';
+    return legacy && d && d > ctx.today ? `${+d.slice(0, 4) - 1}${d.slice(4)}` : d;
+  });
   const [zh, setZh] = useState(!!entry?.zh);
+  const [zhDate, setZhDate] = useState(entry?.zhDate || (entry?.zh ? entry?.baseDate || ctx.today : ''));
   const [fast, setFast] = useState(entry?.fast || []);
   const [eur, setEur] = useState(entry?.eur || fx?.rate || DEFAULT_EUR);
   const [eurAuto, setEurAuto] = useState(entry?.eurAuto !== false);
@@ -106,7 +117,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
     const baseDate = !has ? '' : changed || !entry?.baseDate ? todayISO() : entry.baseDate;
     onSave({
       ...(entry || {}), program: 'ALL', tier, validUntil, nights: +nights || 0, points: +points || 0, baseDate,
-      explorer, explorerDate: explorer ? explorerDate : '', zh, eurAuto, eur: eurAuto ? fx?.rate || +eur || DEFAULT_EUR : +eur || DEFAULT_EUR,
+      v: 2, explorer, explorerDate: explorer ? explorerDate : '', zh, zhDate: zh ? zhDate || todayISO() : '', eurAuto, eur: eurAuto ? fx?.rate || +eur || DEFAULT_EUR : +eur || DEFAULT_EUR,
       fast: fast.filter((f) => f.date && +f.nights > 0).map((f) => ({ ...f, nights: +f.nights })),
     });
   };
@@ -134,7 +145,8 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
             <label className="field"><span>등급 숙박일</span><NumInput value={nights} suffix="박" placeholder="0" onChange={setNights} /></label>
             <label className="field"><span>등급 포인트</span><NumInput value={points} suffix="P" placeholder="0" onChange={setPoints} /></label>
           </div>
-          <p className="help" style={{ margin: 0 }}>아코르 앱 <b>내 계정 › 데시보드</b>의 숫자를 그대로 옮겨 주세요. 이미 받은 보너스 박(Explorer·중올플·패스트트랙)도 이 숫자에 들어 있는 걸로 보고, 오늘 이전 숙박은 중복으로 세지 않아요.</p>
+          <p className="help" style={{ margin: 0 }}>숙박일은 <b>실제로 묵은 박수만</b> 넣어 주세요. Explorer·중올플·패스트트랙·플라잉블루 이벤트 같은 보너스 박은 빼고, 아래 보너스 박에 따로 넣으면 돼요. 포인트는 아코르 앱 <b>내 계정 › 대시보드</b>의 등급 포인트 그대로예요. 오늘 이전 숙박은 이 숫자에 들어 있는 걸로 봐요.</p>
+          {legacy && +entry?.nights > 0 && <div className="notice" style={{ margin: 0 }}>지금 {fmtNum(+entry.nights)}박은 보너스 박이 섞인 앱 숫자일 수 있어요. 보너스를 뺀 실제 투숙 박수로 고쳐 주세요.</div>}
         </div>
         <div className="segcard">
           <div className="sh">보너스 박</div>
@@ -143,22 +155,34 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
             <span>Accor+ Explorer 가입 <small>(갱신할 때마다 30박)</small></span>
           </label>
           {explorer && (
-            <label className="field"><span>다음 갱신일 <span className="faint">(이 날 30박이 예정으로 더해져요)</span></span><DateInput value={explorerDate} onChange={setExplorerDate} /></label>
+            <label className="field"><span>가입일 또는 최근 갱신일 <span className="faint">(이 날과 매년 같은 날 30박)</span></span><DateInput value={explorerDate} onChange={setExplorerDate} /></label>
           )}
           <label className="checkrow light">
-            <input type="checkbox" checked={zh} onChange={(e) => setZh(e.target.checked)} />
-            <span>중국 Accor Plus(중올플) 가입 <small>(가입할 때 20박 한 번 · 이미 받았으면 위 숫자에 들어 있어요)</small></span>
+            <input type="checkbox" checked={zh} onChange={(e) => { setZh(e.target.checked); if (e.target.checked && !zhDate) setZhDate(todayISO()); }} />
+            <span>중국 Accor Plus(중올플) 가입 <small>(가입할 때 20박 한 번)</small></span>
           </label>
-          <div className="lab" style={{ marginTop: 4 }}>패스트트랙 등 프로모션 보너스</div>
+          {zh && (
+            <label className="field"><span>가입일 <span className="faint">(이 날이 속한 해에 20박)</span></span><DateInput value={zhDate} onChange={setZhDate} /></label>
+          )}
+          <div className="lab" style={{ marginTop: 4 }}>추가 보너스 박 <span className="faint">(패스트트랙·플라잉블루 이벤트 등)</span></div>
           {fast.map((f, i) => (
-            <div key={i} className="fastrow">
-              <DateInput value={f.date} onChange={(v) => setF(i, { date: v })} />
-              <NumInput value={f.nights} suffix="박" placeholder="0" onChange={(v) => setF(i, { nights: v })} />
-              <button className="icon-btn" style={{ width: 36, height: 36 }} onClick={() => setFast((l) => l.filter((_, k) => k !== i))} aria-label="삭제"><Icon name="close" size={15} /></button>
+            <div key={i} className="fastbox">
+              <div className="fasthead">
+                <input className="input sm" value={f.label || ''} placeholder="이름 (예: 패스트트랙)" onChange={(e) => setF(i, { label: e.target.value })} />
+                <button className="icon-btn" style={{ width: 36, height: 36 }} onClick={() => setFast((l) => l.filter((_, k) => k !== i))} aria-label="삭제"><Icon name="close" size={15} /></button>
+              </div>
+              <div className="fastrow">
+                <DateInput value={f.date} onChange={(v) => setF(i, { date: v })} />
+                <NumInput value={f.nights} suffix="박" placeholder="0" onChange={(v) => setF(i, { nights: v })} />
+              </div>
             </div>
           ))}
-          <button className="btn sm ghost" onClick={() => setFast((l) => [...l, { date: todayISO(), nights: null, label: '패스트트랙' }])}><Icon name="plus" size={15} />보너스 박 추가</button>
-          <p className="help" style={{ margin: 0 }}>들어오는 날짜를 넣어 주세요. 오늘 이후면 예정, 지났으면 확정으로 더해요(위 숫자를 입력한 날 이전 것은 이미 포함된 걸로 봐요).</p>
+          <div className="fastadd">
+            {FAST_PRESETS.map((p) => (
+              <button key={p.label} className="btn sm ghost" onClick={() => setFast((l) => [...l, { date: todayISO(), nights: p.nights, label: p.label }])}><Icon name="plus" size={14} />{p.btn}</button>
+            ))}
+          </div>
+          <p className="help" style={{ margin: 0 }}>보너스 박이 들어온(들어올) 날짜와 박수를 넣어 주세요. 오늘 이후면 예정, 지났으면 확정으로 그 해에 더해요. 플라잉블루 1+1처럼 묵은 만큼 더 주는 이벤트는 받은 보너스 박수만 넣으면 돼요.</p>
         </div>
         <div className="segcard">
           <div className="sh">환율 <span className="faint" style={{ fontWeight: 600, fontSize: 12 }}>숙박 금액 원화 → 유로 (등급 포인트 추정용)</span></div>
@@ -341,12 +365,12 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
           <div className="tiles num" style={{ marginTop: 10 }}>
             <div className="tile"><div className="k">{nt ? `${s.goal}까지` : '다음 등급'}</div><div className="v" style={{ fontSize: 16 }}>{nt ? remText(s) : '–'}</div><div className="s">{nt ? `예정 포함 ${remText(s, true)}` : '최고 등급'}</div></div>
             <div className="tile"><div className="k">{yr}년 실적으로</div><div className="v">{s.earnedPlan.name}</div><div className="s">예정 포함 · {fmtDot(s.validUntil)}까지</div></div>
-            <div className="tile"><div className="k">보너스 박</div><div className="v">{s.bonus.length ? `+${fmtNum(s.bonus.reduce((a, b) => a + b.nights, 0))}박` : '–'}</div><div className="s">{s.bonus.length ? s.bonus.map((b) => b.label).join(' · ') : prog.explorer ? 'Explorer 갱신일을 넣어 주세요' : '입력한 숫자 이후 없음'}</div></div>
+            <div className="tile"><div className="k">보너스 박</div><div className="v">{s.bonus.length ? `+${fmtNum(s.bonusN)}박` : '–'}</div><div className="s">{s.bonus.length ? s.bonus.map((b) => `${b.label}${b.past ? '' : ' (예정)'}`).join(' · ') : `${yr}년 보너스 없음`}</div></div>
             <div className="tile"><div className="k">지금 등급</div><div className="v">{s.held.name}</div><div className="s">{prog.validUntil ? `${fmtDot(prog.validUntil)}까지` : '유효기간 미입력'}</div></div>
           </div>
           {s.est > 0 && <div className="notice" style={{ margin: '8px 16px 0' }}>등급 포인트는 금액으로 추정한 값이 {s.est}건 있어요. 숙박 후 아코르 앱 값으로 고치면 정확해져요.</div>}
           <StayList rows={s.rows} ctx={ctx} title={`${yr}년 숙박`} onOpen={onOpenStay} onAdd={onAddStay} />
-          <p className="basis">입력한 숫자(입력한 날까지)와 그 뒤 숙박·보너스 박을 더해 계산해요. 등급 포인트는 원화 금액을 유로로 바꿔 브랜드별 적립률(10유로당 25·12.5·10·5P)로 추정한 참고값이고, 실제 적립은 아코르 기준이 우선이에요.</p>
+          <p className="basis">입력한 실제 투숙 박수·포인트(입력한 날까지)에 그 뒤 숙박과 그 해 보너스 박(Explorer·중올플·추가 보너스)을 더해 계산해요. 등급 포인트는 원화 금액을 유로로 바꿔 브랜드별 적립률(10유로당 25·12.5·10·5P)로 추정한 참고값이고, 실제 적립은 아코르 기준이 우선이에요.</p>
         </>
       )}
 
@@ -370,21 +394,28 @@ function StayList({ rows, ctx, title, onOpen, onAdd }) {
 }
 
 function ComboTab({ prog, s, yr }) {
-  // 그 해 숙박(입력한 숫자 이후)만으로 계산하고 보너스 박을 바꿔 가며 비교
-  const stayN = s.rows.reduce((a, r) => a + r.nights, 0);
-  const stayP = s.rows.reduce((a, r) => a + r.points, 0);
-  const fastN = (prog.fast || []).filter((f) => +String(f.date).slice(0, 4) === yr).reduce((a, f) => a + +f.nights, 0);
-  const list = combos(stayN, stayP, fastN);
+  // 그 해 실제 숙박 + 기타 보너스(패스트트랙 등)를 두고 멤버십 보너스(Explorer·중올플)만 바꿔 가며 비교
+  const v2 = isV2(prog);
+  const stayN = (v2 ? s.base.nights : 0) + s.rows.reduce((a, r) => a + r.nights, 0);
+  const stayP = (v2 ? s.base.points : 0) + s.rows.reduce((a, r) => a + r.points, 0);
+  const isMember = (b) => /Explorer|중올플/.test(b.label);
+  const otherN = s.bonus.filter((b) => !isMember(b)).reduce((a, b) => a + b.nights, 0);
+  const zhYear = prog.zh ? +String(prog.zhDate || prog.baseDate || '').slice(0, 4) : 0;
+  const zhUsed = !!prog.zh && zhYear > 0 && zhYear < yr;
+  const expIn = s.bonus.some((b) => /Explorer/.test(b.label));
+  const zhIn = s.bonus.some((b) => /중올플/.test(b.label));
+  const list = combos(stayN, stayP, otherN, { zhUsed });
+  const mine = (id) => (id === 'none' ? !expIn && !zhIn : id === 'exp' ? expIn && !zhIn : id === 'zh' ? zhIn && !expIn : expIn && zhIn);
   return (
     <div className="pad" style={{ marginTop: 14 }}>
       <div className="card">
-        <div className="card-h"><span>{yr}년 숙박 {fmtNum(stayN)}박{fastN ? ` + 패스트트랙 ${fastN}박` : ''} 기준</span></div>
+        <div className="card-h"><span>{yr}년 숙박 {fmtNum(stayN)}박{otherN ? ` + 기타 보너스 ${fmtNum(otherN)}박` : ''} 기준</span></div>
         <div className="cmp">
           {list.map((c) => (
             <div key={c.id} className="cmpbar">
               <div className="h num">
                 <b>{c.label}</b>
-                {(c.id === 'exp' && prog.explorer) || (c.id === 'zh' && prog.zh) || (c.id === 'both' && prog.explorer && prog.zh) ? <span className="badge">가입함</span> : null}
+                {mine(c.id) ? <span className="badge">지금 내 상태</span> : null}
                 <span className="v">{c.tier.name}</span>
               </div>
               <Bar conf={Math.min(1, c.total / 60)} thin done={c.total >= 60} />
@@ -393,7 +424,7 @@ function ComboTab({ prog, s, yr }) {
           ))}
         </div>
       </div>
-      <p className="basis" style={{ padding: '12px 4px' }}>Accor+ Explorer는 갱신할 때마다 30박, 중국 Accor Plus(중올플)는 가입할 때 20박이 한 번 들어와요. 이미 받은 보너스는 이 비교에 넣지 않았어요. 다이아몬드는 등급 포인트(26,000P)로만 갈 수 있어요.</p>
+      <p className="basis" style={{ padding: '12px 4px' }}>Accor+ Explorer는 가입·갱신할 때마다 30박, 중국 Accor Plus(중올플)는 가입할 때 20박이 한 번 들어와요.{zhUsed ? ` 중올플은 ${zhYear}년에 이미 받아서 이 해 비교에서 뺐어요.` : ''} 다이아몬드는 등급 포인트(26,000P)로만 갈 수 있어요.</p>
     </div>
   );
 }

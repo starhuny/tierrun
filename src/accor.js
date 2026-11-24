@@ -3,7 +3,7 @@
 // - Silver 10박/2,000P · Gold 30박/7,000P · Platinum 60박/14,000P · Diamond 26,000P(포인트로만)
 // - 그 해에 딴 등급은 다음 해 12월 31일까지 유지
 // - 등급 포인트: 10유로당 25(대부분) · 12.5(ibis·ibis Styles·Mama Shelter) · 10(Mantra·Peppers·BreakFree·Art Series·Adagio) · 5(Adagio Access·Jo&Joe·greet)
-// - Accor+ Explorer는 갱신 때 30박, 중국 Accor Plus(중올플)는 가입 때 20박 한 번
+// - Accor+ Explorer는 가입·갱신 때마다 30박, 중국 Accor Plus(중올플)는 가입 때 20박 한 번
 
 export const AC_PROGRAM = 'ALL';
 export const DEFAULT_EUR = 1620; // 1유로 = 원 (설정에서 바꿀 수 있음)
@@ -42,12 +42,22 @@ export function stayPoints(s, eur) {
 // 숙박은 체크아웃 날 적립된 걸로 봄
 export const stayDate = (s) => s.checkOut || s.checkIn || '';
 
-// 보너스 박 (입력한 날 이후 들어오는 것만 더함 — 그 전 것은 입력한 숫자에 이미 들어 있음)
-export function bonusEvents(prog) {
+// 보너스 박
+// v2(prog.v === 2): 입력한 숫자는 실제 투숙 박수만 → 그 해 보너스는 날짜와 상관없이 모두 더함
+// 예전 입력(보너스가 숫자에 섞여 있음): 입력한 날 이후 보너스만 더함
+export const isV2 = (prog) => prog?.v === 2;
+const addYears = (d, k) => `${year(d) + k}${String(d).slice(4)}`;
+export function bonusEvents(prog, yr) {
   const out = [];
-  if (prog?.explorer && prog.explorerDate) out.push({ date: prog.explorerDate, nights: 30, label: 'Accor+ Explorer 갱신' });
-  for (const f of prog?.fast || []) if (f?.date && +f.nights > 0) out.push({ date: f.date, nights: +f.nights, label: f.label || '패스트트랙' });
-  return out;
+  if (prog?.explorer && prog.explorerDate) {
+    // 가입·갱신일과 그 뒤 매년 같은 날 30박
+    const k = yr != null ? yr - year(prog.explorerDate) : 0;
+    const ks = yr != null ? (k >= 0 ? [k] : []) : [0];
+    for (const x of ks) out.push({ date: addYears(prog.explorerDate, x), nights: 30, label: x === 0 && isV2(prog) ? 'Accor+ Explorer' : 'Accor+ Explorer 갱신' });
+  }
+  if (prog?.zh) out.push({ date: prog.zhDate || prog.baseDate || '', nights: 20, label: '중올플 가입' });
+  for (const f of prog?.fast || []) if (f?.date && +f.nights > 0) out.push({ date: f.date, nights: +f.nights, label: f.label || '보너스 박' });
+  return out.filter((b) => b.date);
 }
 
 // 연도 집계
@@ -66,14 +76,16 @@ export function acYear(prog, stays, yr, today, eur) {
     if (p.est) r.est++;
     r.rows.push({ s, nights: n, points: p.pts, est: p.est, past: w === 'conf' });
   }
-  for (const b of bonusEvents(prog)) {
-    if (year(b.date) !== yr || !after(b.date)) continue;
+  for (const b of bonusEvents(prog, yr)) {
+    if (year(b.date) !== yr || (!isV2(prog) && !after(b.date))) continue;
     const w = b.date <= today ? 'conf' : 'plan';
     r[w].nights += b.nights;
     r.bonus.push({ ...b, past: w === 'conf' });
   }
+  r.bonus.sort((a, b) => a.date.localeCompare(b.date));
   r.rows.sort((a, b) => stayDate(a.s).localeCompare(stayDate(b.s)));
   r.all = { nights: r.conf.nights + r.plan.nights, points: r.conf.points + r.plan.points };
+  r.bonusN = r.bonus.reduce((a, b) => a + b.nights, 0);
   return r;
 }
 
@@ -119,17 +131,19 @@ export function remText(s, plan = false) {
   return n != null ? `${n.toLocaleString('ko-KR')}박 또는 ${p.toLocaleString('ko-KR')}P` : `${p.toLocaleString('ko-KR')}P`;
 }
 
-// 보너스 조합 비교 (내년 계획용): 예정 숙박 + 고른 보너스로 어디까지 가는지
-export function combos(stayNightsPlanned, stayPointsPlanned, fastNights = 0) {
+// 보너스 조합 비교: 그 해 실제 숙박 + 기타 보너스(패스트트랙 등)에 멤버십 보너스를 바꿔 가며
+export function combos(stayN, stayP, otherN = 0, { zhUsed = false } = {}) {
   const list = [
-    { id: 'none', label: '보너스 없이', nights: 0 },
+    { id: 'none', label: '멤버십 보너스 없이', nights: 0 },
     { id: 'exp', label: 'Accor+ Explorer (+30박)', nights: 30 },
-    { id: 'zh', label: '중올플 (+20박)', nights: 20 },
-    { id: 'both', label: 'Explorer + 중올플 (+50박)', nights: 50 },
+    ...(zhUsed ? [] : [
+      { id: 'zh', label: '중올플 (+20박)', nights: 20 },
+      { id: 'both', label: 'Explorer + 중올플 (+50박)', nights: 50 },
+    ]),
   ];
   return list.map((c) => {
-    const n = stayNightsPlanned + c.nights + fastNights;
-    const t = tierBy(n, stayPointsPlanned);
+    const n = stayN + otherN + c.nights;
+    const t = tierBy(n, stayP);
     const nx = AC_TIERS.find((x) => AC_TIERS.indexOf(x) > AC_TIERS.indexOf(t) && x.nights != null) || null;
     return { ...c, total: n, tier: t, next: nx, rem: nx ? nx.nights - n : 0 };
   });

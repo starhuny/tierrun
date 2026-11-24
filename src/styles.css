@@ -672,7 +672,12 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .strip.ac { background: linear-gradient(120deg, light-dark(#ece6f8, #2a2150), var(--panel) 70%); }
 .badge.cr-ALL { background: light-dark(#ece6f8, #2a2150); color: light-dark(#4b2a8c, #cdb6ff); }
 .mark.bed { background: var(--map-hotel); color: #fff; }
-.fastrow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.fastrow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+.fastbox { display: grid; gap: 8px; padding: 10px; border-radius: 14px; background: var(--bg-2, rgba(0,0,0,.03)); }
+.fasthead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.input.sm { min-height: 40px; font-size: 14px; }
+.fastadd { display: flex; flex-wrap: wrap; gap: 6px; }
+.fastadd .btn { flex: 1 1 auto; }
 .stayrow .ftitle { font-size: 17px; }
 .add-menu { position: absolute; right: 0; bottom: 74px; display: grid; gap: 6px; padding: 8px; border-radius: 18px; background: var(--panel); box-shadow: var(--shadow); z-index: 7; min-width: 170px; }
 .add-menu button { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; font-weight: 700; font-size: 15px; text-align: left; }
