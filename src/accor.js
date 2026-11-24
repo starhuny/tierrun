@@ -53,7 +53,9 @@ export const stayDate = (s) => s.checkOut || s.checkIn || '';
 // 보너스 박
 // v2(prog.v === 2): 입력한 숫자는 실제 투숙 박수만 → 그 해 보너스는 날짜와 상관없이 모두 더함
 // 예전 입력(보너스가 숫자에 섞여 있음): 입력한 날 이후 보너스만 더함
-export const isV2 = (prog) => prog?.v === 2;
+export const isV2 = (prog) => (prog?.v || 0) >= 2;
+// v2: 입력한 숫자 = '기록에 없는' 실적. 기록한 숙박·보너스는 날짜와 상관없이 모두 더함
+// 예전 입력(v 없음): 입력한 숫자 = 그날까지 앱 숫자 전체 → 그 뒤 기록만 더함
 const addYears = (d, k) => `${year(d) + k}${String(d).slice(4)}`;
 export function bonusEvents(prog, yr) {
   const out = [];
@@ -87,7 +89,7 @@ export function acYear(prog, stays, yr, today, eur) {
     if (year(d) !== yr) continue;
     const n = stayNights(s), p = stayPoints(s, eur);
     // 숫자를 입력한 날까지의 숙박: 이미 입력값에 들어 있으니 목록에만 보여 주고 더하지 않음
-    if (!after(d)) { r.rows.push({ s, nights: n, points: p.pts, est: p.est, past: true, included: true }); continue; }
+    if (!isV2(prog) && !after(d)) { r.rows.push({ s, nights: n, points: p.pts, est: p.est, past: true, included: true }); continue; }
     const w = d <= today ? 'conf' : 'plan';
     r[w].nights += n;
     r[w].points += p.pts;
@@ -105,6 +107,15 @@ export function acYear(prog, stays, yr, today, eur) {
   r.all = { nights: r.conf.nights + r.plan.nights, points: r.conf.points + r.plan.points };
   r.bonusN = r.bonus.reduce((a, b) => a + b.nights, 0);
   return r;
+}
+
+// 입력한 숫자와 겹칠 수 있는 기록 (입력한 날까지 끝난 숙박)
+export function overlapStays(prog, stays) {
+  if (!isV2(prog) || !prog?.baseDate || !(+prog.nights > 0 || +prog.points > 0)) return null;
+  const yr = year(prog.baseDate);
+  const l = (stays || []).filter((s) => !isBonusStay(s) && year(stayDate(s)) === yr && stayDate(s) <= prog.baseDate);
+  if (!l.length) return null;
+  return { count: l.length, nights: l.reduce((a, s) => a + stayNights(s), 0), points: l.reduce((a, s) => a + stayPoints(s, prog.eur).pts, 0) };
 }
 
 export function tierBy(n, p) {

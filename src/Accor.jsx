@@ -6,7 +6,7 @@ import { AC_BENEFITS, AC_EXTRAS, AC_BENEFITS_CHECKED } from './accorBenefits.js'
 import { findAirport } from './airports.js';
 import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid, addDays } from './core.js';
 import {
-  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2, isZhStay, isBonusStay, bonusLabel, makeZhStay, makeBonusStay, ZH_NIGHTS,
+  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2, overlapStays, isZhStay, isBonusStay, bonusLabel, makeZhStay, makeBonusStay, ZH_NIGHTS,
 } from './accor.js';
 import { Icon, AirlineMark, Bar, Seg, NumInput, WonInput, DateInput, AirportInput, Ring, CardFace } from './ui.jsx';
 
@@ -182,6 +182,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
   const [points, setPoints] = useState(entry?.points ?? null);
   const [explorer, setExplorer] = useState(!!entry?.explorer);
   const legacy = !!entry && !isV2(entry);
+  const overlap = overlapStays({ ...(entry || {}), v: 2, baseDate: entry?.baseDate || ctx.today, nights, points }, ctx.stays);
   // 예전 입력은 '다음 갱신일'이었으니 미래 날짜면 1년 전(최근 갱신일)으로 바꿔 보여 줌
   const [explorerDate, setExplorerDate] = useState(() => {
     const d = entry?.explorerDate || '';
@@ -218,13 +219,21 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
         </div>
         <label className="field"><span>등급 유효기간 <span className="faint">(아코르 앱 카드에 적힌 날짜)</span></span><DateInput value={validUntil} onChange={setValid} /></label>
         <div className="segcard">
-          <div className="sh">{yr}년 실적</div>
+          <div className="sh">{yr}년 실적 중 기록하지 않은 부분</div>
           <div className="row2">
             <label className="field"><span>등급 숙박일</span><NumInput value={nights} suffix="박" placeholder="0" onChange={setNights} /></label>
             <label className="field"><span>등급 포인트</span><NumInput value={points} suffix="P" placeholder="0" onChange={setPoints} /></label>
           </div>
-          <p className="help" style={{ margin: 0 }}>숙박일은 <b>실제로 묵은 박수만</b> 넣어 주세요. Explorer·중올플·패스트트랙 같은 보너스 박은 빼 주세요. 보너스 박은 따로 넣어요. 포인트는 아코르 앱 <b>내 계정 › 대시보드</b>의 등급 포인트 그대로예요. 오늘 이전 숙박은 이 숫자에 들어 있는 걸로 봐요.</p>
-          {legacy && +entry?.nights > 0 && <div className="notice" style={{ margin: 0 }}>지금 {fmtNum(+entry.nights)}박은 보너스 박이 섞인 앱 숫자일 수 있어요. 보너스를 뺀 실제 투숙 박수로 고쳐 주세요.</div>}
+          <p className="help" style={{ margin: 0 }}>숙박을 하나하나 기록하지 않고 숫자로만 넣고 싶을 때 쓰는 칸이에요. 아코르 앱 <b>내 계정 › 대시보드</b> 숫자에서 <b>기록한 숙박과 보너스 박(Explorer·중올플·패스트트랙 등)을 뺀 나머지</b>를 넣어 주세요. <b>올해 숙박을 다 기록했다면 둘 다 0</b>이에요.</p>
+          {overlap && (
+            <div className="notice" style={{ margin: 0 }}>
+              {yr}년에 기록한 숙박이 {overlap.count}건({fmtNum(overlap.nights)}박 · 약 {fmtNum(overlap.points)}P) 있어요. 위 숫자에 이 숙박이 들어 있으면 두 번 세져요.
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn sm" onClick={() => { setNights(0); setPoints(0); }}>다 기록했어요 · 0으로</button>
+                <button type="button" className="btn sm ghost" onClick={() => { setNights(Math.max(0, (+nights || 0) - overlap.nights)); setPoints(Math.max(0, (+points || 0) - overlap.points)); }}>기록한 만큼 빼기</button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="segcard">
           <div className="sh">Accor+ Explorer</div>
@@ -458,7 +467,7 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
   const s = useMemo(() => acSummary(prog, stays, today, yr, prog.eur), [prog, stays, today, yr]);
   const nt = s.next;
   const dleft = daysBetween(today, s.deadline);
-  const done = !!s.achieved && (s.stretch || !nt);
+  const ov = overlapStays(prog, stays);
   // 그 해 기록: 숙박·보너스 박 기록 + Explorer 자동 보너스, 날짜순
   const items = [
     ...s.rows.map((r) => ({ key: r.s.id, date: stayDate(r.s), r })),
@@ -515,6 +524,11 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
 
           {/* 2. 어떻게 계산됐나: 박수 내역 */}
           <Ledger s={s} prog={prog} yr={yr} target={s.achieved || nt} />
+          {ov && yr === +String(prog.baseDate).slice(0, 4) && (
+            <div className="notice" style={{ margin: '10px 16px 0' }}>
+              직접 입력한 실적({fmtNum(+prog.nights || 0)}박 · {fmtNum(+prog.points || 0)}P)과 기록한 숙박 {ov.count}건이 겹치면 두 번 세져요. 숙박을 다 기록했다면 위 <b>수정</b>에서 숙박일·포인트를 <b>0</b>으로 바꿔 주세요.
+            </div>
+          )}
 
           {/* 3. 다음 목표 (달성 후) */}
           {s.achieved && nt && !s.stretch && (
@@ -559,8 +573,8 @@ function Ledger({ s, prog, yr, target }) {
   const sum = (l, k) => l.reduce((a, r) => a + r[k], 0);
   const aConf = after.filter((r) => r.past), aPlan = after.filter((r) => !r.past);
   const lines = [];
-  if (s.base.nights || s.base.points) lines.push({ k: '실제 숙박', d: `${fmtDot(prog.baseDate)}까지 직접 입력`, n: s.base.nights, p: s.base.points });
-  if (after.length) lines.push({ k: '그 뒤 숙박', d: `${after.length}건 · 아래 기록`, n: sum(aConf, 'nights'), p: sum(aConf, 'points'), np: sum(aPlan, 'nights'), pp: sum(aPlan, 'points') });
+  if (s.base.nights || s.base.points) lines.push({ k: '직접 입력한 실적', d: `기록 안 한 숙박 · ${fmtDot(prog.baseDate)} 입력`, n: s.base.nights, p: s.base.points });
+  if (after.length) lines.push({ k: '기록한 숙박', d: `${after.length}건 · 아래 기록${after.some((r) => r.est) ? ' · 포인트 일부 추정' : ''}`, n: sum(aConf, 'nights'), p: sum(aConf, 'points'), np: sum(aPlan, 'nights'), pp: sum(aPlan, 'points') });
   for (const b of s.bonus) lines.push({ k: b.label, d: `${fmtDot(b.date)}${b.past ? '' : ' 예정'}`, n: b.past ? b.nights : 0, np: b.past ? 0 : b.nights, bonus: true });
   const v = (a, b, u) => (a || b ? <>{a ? fmtNum(a) : b ? '' : 0}{b ? <span className="pl-p">{a ? ' +' : '+'}{fmtNum(b)}</span> : null}{u}</> : <span className="faint">–</span>);
   return (
