@@ -40,8 +40,10 @@ function fromFlight(f) {
   return blank({ ...f, cabin: f.cabin || (f.airline === 'KE' && f.cls ? cabinFromClass(f.cls) : 'Y'), key: f.id, showBase: f.baseSource === 'manual', showOverride: f.milesOverride != null, baseTouched: f.baseSource === 'manual' || f.baseSource === 'ai', creditTouched: f.credit !== defaultCredit(f.airline) });
 }
 
-export default function FlightForm({ initial, today, aiOk, myFlights = [], onSave, onCancel, onDeleteTrip }) {
+export default function FlightForm({ initial, today, aiOk, myFlights = [], onSave, onCancel, onDeleteTrip, onSplit }) {
   const editing = !!initial;
+  const grouping = !!initial?.grouping;
+  const [splitAsk, setSplitAsk] = useState(false);
   const [kind, setKind] = useState(initial?.trip?.kind || (initial?.flights?.length > 1 ? 'multi' : 'oneway'));
   const [segs, setSegs] = useState(() => (initial?.flights?.length ? initial.flights.map(fromFlight) : [blank()]));
   const [priceMode, setPriceMode] = useState(initial?.trip?.priceMode || 'each');
@@ -160,7 +162,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
     <div className="fade-in">
       <div className="dhead">
         <span className="mark" style={{ background: 'var(--navy-btn)', color: 'var(--navy-btn-ink)' }}><Icon name="plane" size={16} /></span>
-        <div><div className="k">스카이패스 기준 자동 계산</div><h2>{editing ? '여정 편집' : '항공편 추가'}</h2></div>
+        <div><div className="k">스카이패스 기준 자동 계산</div><h2>{grouping ? '여정으로 묶기' : editing ? '여정 편집' : '항공편 추가'}</h2></div>
         <button className="icon-btn" onClick={onCancel} aria-label="닫기"><Icon name="close" size={18} /></button>
       </div>
       <div className="form">
@@ -208,7 +210,25 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
           </div>
         )}
       </div>
-      {editing && (
+      {grouping && (
+        <div className="notice info" style={{ margin: '0 16px 12px' }}>
+          고른 {segs.length}편을 한 여정으로 묶어요. 위에서 <b>왕복·다구간</b>을 확인하고, 아래 <b>항공권 총액</b>에 운임을 넣으면 구간별 마일당 단가가 계산돼요. 적립률·기종 등 구간 정보는 그대로예요.
+        </div>
+      )}
+      {onSplit && !grouping && (
+        <div style={{ padding: '0 16px 10px' }}>
+          {splitAsk ? (
+            <div className="row2">
+              <button className="btn sm danger" onClick={onSplit}>구간마다 따로 나누기</button>
+              <button className="btn sm ghost" onClick={() => setSplitAsk(false)}>취소</button>
+            </div>
+          ) : (
+            <button className="btn ghost block" onClick={() => setSplitAsk(true)}>여정 풀기 (구간마다 따로)</button>
+          )}
+          {splitAsk && <p className="help" style={{ margin: '6px 2px 0' }}>총액은 각 구간의 마일 비율로 나눈 금액이 구간별 운임으로 들어가요.</p>}
+        </div>
+      )}
+      {editing && !grouping && (
         <div style={{ padding: '0 16px 16px' }}>
           {confirmDel ? <button className="btn danger block" onClick={onDeleteTrip}>이 여정의 {segs.length}개 구간을 모두 삭제</button> : <button className="btn danger block" onClick={() => setConfirmDel(true)}><Icon name="trash" size={17} />여정 삭제</button>}
         </div>
@@ -219,7 +239,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
           <span>{totalCost ? <>{fmtWon(totalCost)} · <b>{totalMiles ? fmtWon(totalCost / totalMiles) : '–'}</b>/마일</> : '운임 미입력'}</span>
         </div>
         {tried && !valid && <div className="err-t">출발·도착 공항과 날짜를 모든 구간에 넣어 주세요.</div>}
-        <button className="btn primary block" onClick={save}>{editing ? '저장' : `${segs.length}개 구간 추가`}</button>
+        <button className="btn primary block" onClick={save}>{grouping ? `${segs.length}편을 여정으로 묶기` : editing ? '저장' : `${segs.length}개 구간 추가`}</button>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initStore, EMPTY_STATE, useLocalGuest } from './store.js';
 import { aiAvailable } from './ai.js';
-import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum } from './core.js';
+import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum, uid, flightCost } from './core.js';
 import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
@@ -229,14 +229,28 @@ export default function App() {
   const addNew = () => setStack({ name: 'form' });
   const editTrip = (f) => setStack({ name: 'form', tripId: f.tripId, flightId: f.id });
 
+  // 여정 정리: 항공편이 하나도 없는 여정은 지우고, 한 편만 남은 여정은 편도로
+  const tidyTrips = (flightsArr, tripsObj) => {
+    const cnt = new Map();
+    for (const f of flightsArr) cnt.set(f.tripId, (cnt.get(f.tripId) || 0) + 1);
+    const out = {};
+    for (const [k, t] of Object.entries(tripsObj)) {
+      if (!cnt.has(k)) continue;
+      out[k] = cnt.get(k) === 1 && t.kind !== 'oneway' ? { ...t, kind: 'oneway', priceMode: 'each', price: null } : t;
+    }
+    return out;
+  };
   const saveTrip = ({ trip, flights: fl, removedIds }) => {
-    setState((s) => ({
-      ...s,
-      trips: { ...s.trips, [trip.id]: trip },
-      flights: [...s.flights.filter((f) => f.tripId !== trip.id && !removedIds.includes(f.id)), ...fl],
-    }));
+    const ids = new Set(fl.map((f) => f.id));
+    setState((s) => {
+      // 다른 여정에 있던 항공편을 묶었으면 예전 자리에서 빼고 새 여정으로
+      const rest = s.flights.filter((f) => f.tripId !== trip.id && !removedIds.includes(f.id) && !ids.has(f.id));
+      const flights2 = [...rest, ...fl];
+      return { ...s, flights: flights2, trips: tidyTrips(flights2, { ...s.trips, [trip.id]: trip }) };
+    });
     const first = sortFlights(fl)[0];
     say(`${fl.length}개 구간 저장 · ${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일`);
+    setPicking(null);
     if (first) open(first.id);
     else close();
   };
@@ -291,6 +305,33 @@ export default function App() {
       null,
       6000,
     );
+  };
+  // 여정 풀기: 구간마다 따로 (총액은 마일 비율로 나눈 금액을 각 구간 운임으로)
+  const splitTrip = (tripId) => {
+    setState((s) => {
+      const fl = s.flights.filter((f) => f.tripId === tripId);
+      const trips2 = { ...s.trips };
+      delete trips2[tripId];
+      const moved = fl.map((f) => {
+        const id = uid();
+        trips2[id] = { id, kind: 'oneway', priceMode: 'each', price: null };
+        const c = flightCost(f, s.flights, s.trips);
+        return { ...f, tripId: id, price: c != null ? Math.round(c) : f.price ?? null };
+      });
+      return { ...s, flights: [...s.flights.filter((f) => f.tripId !== tripId), ...moved], trips: trips2 };
+    });
+    setStack(null);
+    say('여정을 풀어서 구간마다 따로 저장했어요');
+  };
+  // 목록에서 골라 여정으로 묶기
+  const [picking, setPicking] = useState(null); // null | Set(id)
+  const groupPicked = () => {
+    const fl = sortFlights(flights.filter((f) => picking?.has(f.id)));
+    if (fl.length < 2) return;
+    const round = fl.length === 2 && fl[0].from === fl[1].to && fl[0].to === fl[1].from;
+    const prices = fl.map((f) => flightCost(f, flights, trips)).filter((x) => x != null);
+    const price = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0)) : null;
+    setStack({ name: 'form', group: { trip: { id: uid(), kind: round ? 'round' : 'multi', priceMode: 'total', price }, flights: fl } });
   };
   const deleteTrip = (tripId) => {
     setState((s) => {
@@ -429,13 +470,14 @@ export default function App() {
     const tripFl = view.tripId ? sortFlights(flights.filter((f) => f.tripId === view.tripId)) : view.flightId ? flights.filter((f) => f.id === view.flightId) : null;
     content = (
       <FlightForm
-        key={view.tripId || 'new'}
-        initial={tripFl?.length ? { trip: trips[view.tripId] || null, flights: tripFl } : null}
+        key={view.group ? view.group.trip.id : view.tripId || 'new'}
+        initial={view.group ? { ...view.group, grouping: true } : tripFl?.length ? { trip: trips[view.tripId] || null, flights: tripFl } : null}
+        onSplit={view.tripId && tripFl?.length > 1 ? () => splitTrip(view.tripId) : null}
         today={today}
         aiOk={aiOk}
         myFlights={flights}
         onSave={saveTrip}
-        onCancel={() => (view.flightId ? open(view.flightId) : setStack(null))}
+        onCancel={() => (view.group ? setStack(null) : view.flightId ? open(view.flightId) : setStack(null))}
         onDeleteTrip={() => deleteTrip(view.tripId)}
       />
     );
@@ -462,6 +504,9 @@ export default function App() {
         onFlighty={() => setStack({ name: 'import' })}
         onAircraft={() => setStack({ name: 'aircraft' })}
         onDelete={swipeDelete}
+        picking={picking}
+        setPicking={setPicking}
+        onGroup={groupPicked}
         onTier={() => setTab('tier')}
         banner={banner}
         head={<Head title="내 항공편" right={avatar} />}

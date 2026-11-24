@@ -26,7 +26,7 @@ export function CabinBadge({ f }) {
   return <span className={`badge cabin-${c}`}>{CABIN[c]?.name || '일반석'}</span>;
 }
 
-export function FlightRow({ f, ctx, selected, onClick }) {
+export function FlightRow({ f, ctx, selected, onClick, pick }) {
   const { today, flights, trips, profile } = ctx;
   const e = earnedMiles(f);
   const p = flightPoints(f);
@@ -34,8 +34,13 @@ export function FlightRow({ f, ctx, selected, onClick }) {
   const bd = baselineDate(profile);
   const excluded = bd && f.date <= bd;
   return (
-    <button className={`frow ${selected ? 'sel' : ''}`} onClick={onClick}>
-      <DDay f={f} today={today} />
+    <button className={`frow ${selected ? 'sel' : ''} ${pick ? 'picked' : ''}`} onClick={onClick} aria-pressed={pick === undefined ? undefined : pick}>
+      {pick === undefined ? <DDay f={f} today={today} /> : (
+        <div className="dday">
+          <span className={`pick-ck ${pick ? 'on' : ''}`}>{pick && <Icon name="check" size={16} stroke={3} />}</span>
+          <small>{daysBetween(today, f.date) < 0 ? '탑승 완료' : `${daysBetween(today, f.date)}일 후`}</small>
+        </div>
+      )}
       <div>
         <div className="fmeta">
           <AirlineMark code={f.airline} size="sm" />
@@ -123,11 +128,15 @@ function Gap({ prev, next }) {
   return <div className="gap">{city(prev.to)} <span>체류 {txt}</span></div>;
 }
 
-export function RowList({ list, ctx, selectedId, onOpen, onDelete, swipe }) {
+export function RowList({ list, ctx, selectedId, onOpen, onDelete, swipe, picking, onPick }) {
   const out = [];
   list.forEach((f, i) => {
     const prev = list[i - 1];
     if (prev && prev.tripId && prev.tripId === f.tripId) out.push(<Gap key={`g${f.id}`} prev={prev} next={f} />);
+    if (picking) {
+      out.push(<div key={f.id} className="rowwrap"><FlightRow f={f} ctx={ctx} pick={picking.has(f.id)} onClick={() => onPick(f.id)} /></div>);
+      return;
+    }
     const row = <FlightRow f={f} ctx={ctx} selected={selectedId === f.id} onClick={() => onOpen(f.id)} />;
     out.push(onDelete ? <SwipeRow key={f.id} id={f.id} swipe={swipe} onDelete={onDelete}>{row}</SwipeRow> : <div key={f.id} className="rowwrap">{row}</div>);
   });
@@ -241,11 +250,12 @@ export function TierStrip({ goals, profile, onClick }) {
 }
 
 /* ───────── 항공편 목록 ───────── */
-export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onTier, onAircraft, head, banner }) {
+export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onTier, onAircraft, picking, setPicking, onGroup, head, banner }) {
   const { flights, today } = ctx;
   const [showPast, setShowPast] = useState(false);
   const [openId, setOpenId] = useState(null);
   const swipe = { open: openId, setOpen: setOpenId };
+  const pickOne = (id) => setPicking((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const sorted = useMemo(() => sortFlights(flights), [flights]);
   const upcoming = sorted.filter((f) => f.date >= today);
   const past = sorted.filter((f) => f.date < today).reverse();
@@ -271,20 +281,58 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
         </div>
       ) : (
         <>
+          {setPicking && flights.length > 1 && (
+            <div className="pick-head">
+              {picking ? (
+                <>
+                  <span><b>여정으로 묶을 항공편</b>을 고르세요</span>
+                  <button className="link" onClick={() => setPicking(null)}>취소</button>
+                </>
+              ) : (
+                <button className="btn sm sky" onClick={() => { setPicking(new Set()); setShowPast(true); }}><Icon name="list" size={15} />골라서 여정으로 묶기</button>
+              )}
+            </div>
+          )}
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{upcoming.length}편</span></div>
-          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>예정된 항공편이 없어요.</p>}
+          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} picking={picking} onPick={pickOne} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>예정된 항공편이 없어요.</p>}
           {past.length > 0 && (
             <>
               <div className="section-h"><span>지난 항공편</span><span className="faint num">{past.length}편</span></div>
-              <RowList list={showPast ? past : past.slice(0, 4)} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} />
+              <RowList list={showPast ? past : past.slice(0, 4)} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} picking={picking} onPick={pickOne} />
               {past.length > 4 && <button className="btn sm ghost more" onClick={() => setShowPast((v) => !v)}>{showPast ? '접기' : `지난 항공편 ${past.length - 4}편 더 보기`}</button>}
             </>
           )}
-          {onDelete && <p className="help" style={{ margin: '14px 20px 0', textAlign: 'center' }}>항공편을 왼쪽으로 밀면 바로 삭제할 수 있어요.</p>}
+          {onDelete && !picking && <p className="help" style={{ margin: '14px 20px 0', textAlign: 'center' }}>항공편을 왼쪽으로 밀면 바로 삭제할 수 있어요.</p>}
+          {picking && <PickBar flights={sorted} picking={picking} setPicking={setPicking} onGroup={onGroup} />}
           {onFlighty && <button className="link imp-link" onClick={onFlighty}>Flighty 기록 가져오기</button>}
         </>
       )}
     </>
+  );
+}
+
+// 고른 항공편 묶기 바: 한 편만 골랐으면 돌아오는 편(또는 이어지는 편) 추천
+function PickBar({ flights, picking, setPicking, onGroup }) {
+  const chosen = flights.filter((f) => picking.has(f.id));
+  let hint = null;
+  if (chosen.length >= 1) {
+    const first = chosen[0], last = chosen[chosen.length - 1];
+    const within = (a, b) => (Date.parse(b) - Date.parse(a)) / 86400000;
+    hint = flights.find((f) => !picking.has(f.id) && f.date >= last.date && within(last.date, f.date) <= 60 && f.from === last.to && (f.to === first.from || chosen.length === 1)) || null;
+  }
+  return (
+    <div className="pick-bar">
+      <div className="pick-line num">
+        <span><b>{chosen.length}편</b> 선택{chosen.length ? ` · ${chosen.map((f) => f.from).concat(chosen[chosen.length - 1].to).join('→')}` : ''}</span>
+        {chosen.length > 0 && <button className="link" onClick={() => setPicking(new Set())}>모두 해제</button>}
+      </div>
+      {hint && (
+        <button className="pick-hint num" onClick={() => setPicking((p) => new Set([...p, hint.id]))}>
+          <Icon name="plus" size={14} />{hint.to === chosen[0].from ? '돌아오는 편' : '이어지는 편'} 추가: {hint.airline} {hint.flightNo} · {fmtDate(hint.date, { weekday: false })} {hint.from}→{hint.to}
+        </button>
+      )}
+      <button className="btn primary block" disabled={chosen.length < 2} onClick={onGroup}>{chosen.length < 2 ? '2편 이상 골라 주세요' : `${chosen.length}편을 여정으로 묶기`}</button>
+    </div>
   );
 }
 

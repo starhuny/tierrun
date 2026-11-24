@@ -515,3 +515,13 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .rk-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .rk-name b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rk-name .faint { font-size: 12px; }
+/* 골라서 여정으로 묶기 */
+.pick-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px 0; font-size: 14px; }
+.pick-ck { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line-2); display: grid; place-items: center; background: var(--panel); color: #fff; }
+.pick-ck.on { background: var(--sky); border-color: var(--sky); }
+.frow.picked { background: var(--sky-soft); }
+.pick-bar { position: sticky; bottom: 0; z-index: 5; margin: 14px 12px 0; padding: 12px; border-radius: 20px; background: light-dark(rgba(255, 255, 255, 0.95), rgba(20, 28, 64, 0.95)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--shadow); display: grid; gap: 8px; }
+.pick-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.pick-line b { color: var(--ink); }
+.pick-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-hint { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 12px; background: var(--sky-soft); color: var(--sky-ink); font-size: 13px; font-weight: 700; text-align: left; }
