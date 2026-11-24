@@ -63,7 +63,7 @@ async function main(req, res) {
   const bbox = [lon - dLon, lat - dLat, lon + dLon, lat + dLat].map((x) => x.toFixed(3)).join(',');
   // 한국은 한글 이름 그대로, 그 밖은 영어 이름 우선
   const lang = cc === 'KR' ? '' : 'en';
-  const qs = [...QUERIES, ...(LOCAL[cc] || [])];
+  const qs = [...QUERIES, ...(LOCAL[cc] || [])].slice(0, +req.query.n || 99);
   // 공개 서버라 한 번에 몰아 보내지 않고 8개씩, 실패한 건 한 번 더
   const t0 = Date.now();
   const results = new Array(qs.length);
