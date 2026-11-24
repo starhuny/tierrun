@@ -66,17 +66,18 @@ function HotelPicker({ s, set, onTypeName }) {
   const cLat = s.cityLat ?? s.lat, cLon = s.cityLon ?? s.lon;
   const has = cLat != null && cLon != null;
   const [st, setSt] = useState({ k: '', list: null, err: false });
+  const [retry, setRetry] = useState(0);
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState(false);
   const [brand, setBrand] = useState('');
   const k = has ? `${(+cLat).toFixed(2)},${(+cLon).toFixed(2)}` : '';
   useEffect(() => {
-    if (!k || st.k === k) return;
+    if (!k || (st.k === k && !st.retry)) return;
     let live = true;
     setSt({ k, list: null, err: false });
-    fetchHotels(cLat, cLon).then((list) => live && setSt({ k, list, err: false })).catch(() => live && setSt({ k, list: [], err: true }));
+    fetchHotels(cLat, cLon, s.cc).then((list) => live && setSt({ k, list, err: false })).catch(() => live && setSt({ k, list: [], err: true }));
     return () => { live = false; };
-  }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [k, retry]); // eslint-disable-line react-hooks/exhaustive-deps
   // 도시를 새로 고르면 목록을 펼침
   const prevK = useRef(k);
   useEffect(() => { if (k && prevK.current !== k && !s.hotelId) setOpen(true); prevK.current = k; }, [k]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,7 +113,7 @@ function HotelPicker({ s, set, onTypeName }) {
       {has && open && (
         <div className="hlist">
           <div className="hlist-h">
-            <span>{st.list == null ? '호텔 목록 불러오는 중…' : st.err ? '목록을 불러오지 못했어요' : `${s.cityName || '이 도시'} 아코르 호텔 ${list.length}곳 · 가까운 순`}</span>
+            <span>{st.list == null ? '호텔 목록 불러오는 중…' : st.err ? <>목록을 불러오지 못했어요 <button type="button" className="lnk" onClick={() => { setSt((x) => ({ ...x, retry: true })); setRetry((n) => n + 1); }}>다시 시도</button></> : `${s.cityName || '이 도시'} 아코르 호텔 ${list.length}곳 · 가까운 순`}</span>
             <button type="button" className="lnk" onClick={() => setOpen(false)}>닫기</button>
           </div>
           {brands.length > 1 && (

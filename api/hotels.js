@@ -1,34 +1,83 @@
-// 임시 점검: 서버에서 호텔 데이터 출처별로 닿는지 확인
-export const config = { maxDuration: 30 };
+// Vercel 서버 함수: GET /api/hotels?lat=13.75&lon=100.50[&cc=TH]
+//   → { hotels: [{ id, name, nameEn, brand, lat, lon, km }], source }
+// 아코르는 호텔 목록 API를 공개하지 않아서 OpenStreetMap 검색(Photon)으로 도시 주변 아코르 브랜드 호텔을 찾음
+// (Overpass 공개 서버는 클라우드 요청을 막거나 너무 느려서 Photon 사용)
+// 같은 도시는 Vercel CDN에 7일 캐시
+import { detectBrand } from '../src/brands.js';
+
+export const config = { maxDuration: 20 };
 const UA = 'TierTracker/1.0 (+https://tierrun.vercel.app; hotel list)';
-const small = '[out:json][timeout:8];node["tourism"="hotel"]["name"~"novotel",i](around:15000,13.75,100.5);out tags 5;';
-const tries = () => [
-  ['photon', 'https://photon.komoot.io/api/?q=novotel&lat=13.75&lon=100.5&limit=10', {}],
-  ['photon-bbox', 'https://photon.komoot.io/api/?q=novotel&bbox=100.3,13.5,100.8,14.0&limit=20&osm_tag=tourism:hotel', {}],
-  ['nominatim', 'https://nominatim.openstreetmap.org/search?q=novotel+bangkok&format=jsonv2&limit=10', {}],
-  ['op-de', 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(small), {}],
-  ['op-coffee', 'https://overpass.private.coffee/api/interpreter?data=' + encodeURIComponent(small), {}],
-  ['op-kumi', 'https://overpass.kumi.systems/api/interpreter?data=' + encodeURIComponent(small), {}],
-  ['op-jp', 'https://overpass.osm.jp/api/interpreter?data=' + encodeURIComponent(small), {}],
-  ['op-tw', 'https://overpass.nchc.org.tw/api/interpreter?data=' + encodeURIComponent(small), {}],
-  ['op-ru', 'https://overpass.openstreetmap.ru/api/interpreter?data=' + encodeURIComponent(small), {}],
-];
+const R_KM = 25;
+const QUERIES = ['novotel', 'ibis', 'sofitel', 'mercure', 'pullman', 'mgallery', 'movenpick', 'swissotel', 'fairmont', 'raffles', 'adagio', 'mama shelter', 'banyan tree', 'angsana', 'mondrian', '25hours', 'hoxton', 'peppers', 'mantra', 'rixos'];
+const LOCAL = {
+  KR: ['노보텔', '이비스', '소피텔', '머큐어', '풀만', '몬드리안', '페어몬트', '스위스텔', '모벤픽', '반얀트리'],
+  JP: ['ノボテル', 'イビス', 'ソフィテル', 'メルキュール', 'プルマン', 'スイスホテル', 'フェアモント'],
+  CN: ['诺富特', '宜必思', '索菲特', '美居', '铂尔曼', '瑞士酒店', '费尔蒙'],
+  TW: ['諾富特', '宜必思', '索菲特', '美居', '鉑爾曼'],
+};
+
+const km = (a, b, c, d) => {
+  const t = Math.PI / 180;
+  const x = Math.sin(((c - a) * t) / 2) ** 2 + Math.cos(a * t) * Math.cos(c * t) * Math.sin(((d - b) * t) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(x));
+};
+
+async function photon(q, bbox, lang) {
+  const u = new URL('https://photon.komoot.io/api/');
+  u.searchParams.set('q', q);
+  u.searchParams.set('bbox', bbox);
+  u.searchParams.set('limit', '50');
+  u.searchParams.set('osm_tag', 'tourism');
+  if (lang) u.searchParams.set('lang', lang);
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(), 9000);
+  try {
+    const r = await fetch(u, { signal: ctl.signal, headers: { 'User-Agent': UA, Accept: 'application/json' } });
+    if (!r.ok) throw new Error(`photon ${r.status}`);
+    return (await r.json())?.features || [];
+  } finally {
+    clearTimeout(tm);
+  }
+}
+
 export default async function handler(req, res) {
-  const out = [];
-  await Promise.all(tries().map(async ([name, url]) => {
-    const t = Date.now();
-    try {
-      const ctl = new AbortController();
-      const tm = setTimeout(() => ctl.abort(), 9000);
-      const r = await fetch(url, { signal: ctl.signal, headers: { 'User-Agent': UA, Accept: 'application/json', Referer: 'https://tierrun.vercel.app/' } });
-      clearTimeout(tm);
-      const txt = await r.text();
-      const n = (txt.match(/"(name|display_name)"/g) || []).length;
-      out.push({ name, status: r.status, ms: Date.now() - t, n, cors: r.headers.get('access-control-allow-origin') || '' });
-    } catch (e) {
-      out.push({ name, err: e.name === 'AbortError' ? 'timeout' : String(e.message || e).slice(0, 80), ms: Date.now() - t });
+  const lat = Math.round(+req.query.lat * 100) / 100, lon = Math.round(+req.query.lon * 100) / 100;
+  const cc = String(req.query.cc || '').toUpperCase().slice(0, 2);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 85 || Math.abs(lon) > 180) {
+    return res.status(400).json({ error: '좌표가 필요해요.' });
+  }
+  const dLat = R_KM / 111, dLon = R_KM / (111 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+  const bbox = [lon - dLon, lat - dLat, lon + dLon, lat + dLat].map((x) => x.toFixed(3)).join(',');
+  // 한국은 한글 이름 그대로, 그 밖은 영어 이름 우선
+  const lang = cc === 'KR' ? '' : 'en';
+  const qs = [...QUERIES, ...(LOCAL[cc] || [])];
+  const results = await Promise.allSettled(qs.map((q) => photon(q, bbox, lang)));
+  const ok = results.filter((r) => r.status === 'fulfilled');
+  if (!ok.length) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ hotels: [], error: '호텔 목록을 가져오지 못했어요.', detail: results.map((r) => String(r.reason?.message || r.reason || '')).slice(0, 3) });
+  }
+  const seen = new Map();
+  for (const r of ok) {
+    for (const f of r.value) {
+      const p = f.properties || {};
+      const [x, y] = f.geometry?.coordinates || [];
+      if (y == null || !p.name) continue;
+      const brand = detectBrand(p.name);
+      if (!brand) continue;
+      const d = km(lat, lon, y, x);
+      if (d > R_KM * 1.2) continue;
+      const id = `${(p.osm_type || 'x').toLowerCase()}${p.osm_id}`;
+      if (!seen.has(id)) seen.set(id, { id, name: p.name, nameEn: '', brand, lat: +y.toFixed(5), lon: +x.toFixed(5), km: Math.round(d * 10) / 10 });
     }
-  }));
-  res.setHeader('Cache-Control', 'no-store');
-  res.status(200).json(out);
+  }
+  // 같은 호텔(같은 브랜드 150m 안이거나 같은 이름)은 하나로
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9가-힣぀-ヿ一-鿿]/g, '');
+  const keep = [];
+  for (const h of [...seen.values()].sort((a, b) => a.km - b.km)) {
+    if (keep.some((k) => norm(k.name) === norm(h.name) || (k.brand === h.brand && km(k.lat, k.lon, h.lat, h.lon) < 0.15))) continue;
+    keep.push(h);
+  }
+  res.setHeader('Cache-Control', keep.length ? 's-maxage=604800, stale-while-revalidate=1209600' : 's-maxage=86400');
+  return res.status(200).json({ hotels: keep.slice(0, 200), source: 'OpenStreetMap (Photon)', partial: ok.length < results.length });
 }
