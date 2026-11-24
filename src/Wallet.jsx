@@ -329,7 +329,7 @@ function SpRow({ r, onOpen, today }) {
   );
 }
 
-export function AlaskaView({ prog, ctx, onEdit, onBack, onSetMethod, onRewards, onOpen }) {
+export function AlaskaView({ prog, ctx, head, onEdit, onBack, onSetMethod, onRewards, onOpen }) {
   const { flights, today } = ctx;
   const yr0 = thisYear(today);
   const years = [yr0, yr0 + 1];
@@ -340,11 +340,13 @@ export function AlaskaView({ prog, ctx, onEdit, onBack, onSetMethod, onRewards, 
   const dleft = daysBetween(today, s.deadline);
   return (
     <div className="fade-in">
-      <div className="dhead">
-        <button className="icon-btn" onClick={onBack} aria-label="지갑으로"><Icon name="back" size={18} /></button>
-        <div><div className="k">원월드 · 지갑</div><h2>알래스카 Atmos</h2></div>
-        <button className="icon-btn" onClick={onEdit} aria-label="티어 수정"><Icon name="edit" size={17} /></button>
-      </div>
+      {head || (
+        <div className="dhead">
+          <button className="icon-btn" onClick={onBack} aria-label="지갑으로"><Icon name="back" size={18} /></button>
+          <div><div className="k">원월드 · 지갑</div><h2>알래스카 Atmos</h2></div>
+          <button className="icon-btn" onClick={onEdit} aria-label="티어 수정"><Icon name="edit" size={17} /></button>
+        </div>
+      )}
       <div className="pad" style={{ paddingTop: 6 }}>
         <CardFace {...asFace(prog, flights, today)} />
       </div>
@@ -526,6 +528,25 @@ function CompareTab({ prog, ctx, yr, onSetMethod, onOpen }) {
         )}
       </div>
       <p className="basis" style={{ padding: '12px 4px' }}>적립 방식은 1년에 한 번 바꿀 수 있고 소급되지 않아요. 여기서 바꾸면 {METHOD_FROM_YEAR}년 이후 항공편의 적립 예정이 그 방식으로 바뀌어요. 알래스카 계정에서도 같은 방식으로 골라 주세요.</p>
+    </div>
+  );
+}
+
+/* ───────── 등급 현황 탭 맨 위: 지갑 순서대로 프로그램 고르기 ───────── */
+export function ProgSwitch({ list, value, onChange, onEdit }) {
+  return (
+    <div className="pswitch">
+      <div className="pchips" role="tablist" aria-label="등급 프로그램">
+        {list.map((w) => {
+          const p = PROGRAMS[w.program];
+          return (
+            <button key={w.program} role="tab" aria-selected={value === w.program} className={value === w.program ? 'on' : ''} onClick={() => onChange(w.program)}>
+              <AirlineMark code={p.airline} size="xs" />{p.short}
+            </button>
+          );
+        })}
+      </div>
+      {onEdit && <button className="link" onClick={onEdit}>수정</button>}
     </div>
   );
 }

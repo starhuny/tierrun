@@ -17,13 +17,14 @@ export const emptyProfile = (name = '') => ({
 
 
 
-export default function Settings({ profile, user, mode, note, isSetup, setupTitle, hasFlights, onSave, onClose, onSample, onFlighty, onExport, onImport, onReset, onSignOut }) {
+export default function Settings({ profile, user, mode, note, isSetup, setupTitle, hasFlights, onSave, onClose, onSample, onFlighty, onRemoveKE, onExport, onImport, onReset, onSignOut }) {
   const [p, setP] = useState(() => ({ ...emptyProfile(user?.name || ''), ...(profile || {}), base: { ...emptyProfile().base, ...(profile?.base || {}) } }));
   const [rules, setRules] = useState(() => mergeRules(profile?.rules));
   const [imp, setImp] = useState('');
   const [msg, setMsg] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [editEnd, setEditEnd] = useState(false);
+  const [askKE, setAskKE] = useState(false);
   const set = (patch) => setP((x) => ({ ...x, ...patch }));
   const setB = (k, v) => setP((x) => ({ ...x, base: { ...x.base, [k]: v } }));
   const setR = (g, k, v) => setRules((r) => ({ ...r, [g]: { ...r[g], [k]: v ?? 0 } }));
@@ -196,6 +197,16 @@ export default function Settings({ profile, user, mode, note, isSetup, setupTitl
           </div>
         </details>
 
+        {onRemoveKE && (
+          askKE ? (
+            <div className="row2">
+              <button className="btn sm danger" onClick={onRemoveKE}>스카이패스 빼기</button>
+              <button className="btn sm ghost" onClick={() => setAskKE(false)}>취소</button>
+            </div>
+          ) : (
+            <button className="btn sm ghost danger-t" onClick={() => setAskKE(true)}><Icon name="trash" size={15} />스카이패스를 지갑에서 빼기 (항공편 기록은 그대로)</button>
+          )
+        )}
         {!isSetup && (
           <div className="segcard">
             <div className="sh">데이터</div>

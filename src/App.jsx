@@ -10,7 +10,7 @@ import { FriendsView, FriendView } from './Friends.jsx';
 import { AircraftView } from './Aircraft.jsx';
 import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
-import { WalletView, TierAddView, AlaskaView, SetupStart } from './Wallet.jsx';
+import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './Wallet.jsx';
 import { walletOf, progEntry, hasProgram } from './wallet.js';
 import { flightSP } from './alaska.js';
 
@@ -222,11 +222,15 @@ export default function App() {
   const ctx = { flights, trips, profile, today, user: ad?.user, together, friends, asProg };
   const [alliance, setAlliance] = useState('ALL');
   const [setupPick, setSetupPick] = useState(null); // 처음 설정: { name, programs }
+  const [tierProg, setTierProg] = useState(null); // 등급 현황 탭에서 보는 프로그램 (없으면 지갑 첫 카드)
   // ── 티어 지갑 ──
   const setWallet = (fn) => setState((s) => ({ ...s, profile: { ...s.profile, wallet: fn(walletOf(s.profile)) } }));
+  // 지갑 카드·맨 위 띠를 누르면 등급 현황 탭에서 그 프로그램을 보여줌
   const openProgram = (id) => {
-    if (id === 'KE') { setStack(null); setTab('tier'); scrollRef.current?.scrollTo?.(0, 0); }
-    else setStack({ name: 'program', id });
+    setTierProg(id);
+    setStack(null);
+    setTab('tier');
+    scrollRef.current?.scrollTo?.(0, 0);
   };
   const saveTier = (entry, { convert = [] } = {}) => {
     const conv = new Set(convert);
@@ -239,17 +243,20 @@ export default function App() {
       return { ...s, profile: { ...base, wallet: next }, flights: s.flights.map((f) => (conv.has(f.id) ? { ...f, program: entry.program, credit: 'NONE' } : f)) };
     });
     setSetupPick(null);
-    setStack({ name: 'program', id: entry.program });
+    setTierProg(entry.program);
+    setStack(null);
+    setTab('tier');
     say(isNew ? `지갑에 알래스카 티어를 추가했어요${conv.size ? ` · 원월드 ${conv.size}편을 알래스카로 적립` : ''}` : '저장했어요');
   };
   const removeTier = (program) => {
     setState((s) => ({
       ...s,
       profile: { ...s.profile, wallet: walletOf(s.profile).filter((x) => x.program !== program) },
-      flights: s.flights.map((f) => (f.program === program ? { ...f, program: 'KE', credit: defaultCredit(f.airline) } : f)),
+      flights: program === 'KE' ? s.flights : s.flights.map((f) => (f.program === program ? { ...f, program: 'KE', credit: defaultCredit(f.airline) } : f)),
     }));
+    setTierProg(null);
     setStack({ name: 'wallet' });
-    say('지갑에서 뺐어요. 해당 항공편은 스카이패스 항공편으로 돌아갔어요');
+    say(program === 'KE' ? '스카이패스를 지갑에서 뺐어요. 항공편 기록은 그대로예요' : '지갑에서 뺐어요. 해당 항공편은 스카이패스 항공편으로 돌아갔어요');
   };
   // 지갑에 스카이패스 추가 (알래스카만으로 시작한 경우)
   const addProgram = (id) => {
@@ -497,6 +504,7 @@ export default function App() {
         onClose={() => (view.setup ? setSetupPick(null) : setStack(null))}
         onSample={loadSample}
         onFlighty={() => setStack({ name: 'import' })}
+        onRemoveKE={!view.setup && hasProgram(profile, 'KE') && walletOf(profile).length > 1 ? () => removeTier('KE') : null}
         onExport={() => JSON.stringify({ app: 'tierrun', v: 1, ...state })}
         onImport={(txt) => {
           try {
@@ -544,19 +552,7 @@ export default function App() {
         ctx={ctx}
         onSave={saveTier}
         onDelete={() => removeTier(view.program)}
-        onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, view.program) ? { name: 'program', id: view.program } : { name: 'wallet' }))}
-      />
-    );
-  } else if (view?.name === 'program' && asProg && view.id === 'AS') {
-    content = (
-      <AlaskaView
-        prog={asProg}
-        ctx={ctx}
-        onBack={() => setStack({ name: 'wallet' })}
-        onEdit={() => setStack({ name: 'tieradd', program: 'AS' })}
-        onSetMethod={(m) => { patchProg('AS', { method: m }); say('적립 방식을 바꿨어요. 2027년 이후 항공편에 적용돼요'); }}
-        onRewards={(yr, sp, ids) => patchProg('AS', (x) => ({ rewards: { ...(x.rewards || {}), [yr]: { ...(x.rewards?.[yr] || {}), [sp]: ids } } }))}
-        onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'program', backId: 'AS' }); }}
+        onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, view.program) ? null : { name: 'wallet' }))}
       />
     );
   } else if (view?.name === 'friends') {
@@ -591,22 +587,32 @@ export default function App() {
     ) : (
       <div className="empty"><p>항공편을 찾을 수 없어요.</p><button className="btn" onClick={close}>돌아가기</button></div>
     );
-  } else if (tab === 'tier' && !hasProgram(profile, 'KE')) {
-    content = asProg ? (
-      <AlaskaView
-        prog={asProg}
-        ctx={ctx}
-        onBack={() => setStack({ name: 'wallet' })}
-        onEdit={() => setStack({ name: 'tieradd', program: 'AS' })}
-        onSetMethod={(m) => { patchProg('AS', { method: m }); say('적립 방식을 바꿨어요. 2027년 이후 항공편에 적용돼요'); }}
-        onRewards={(yr, sp, ids) => patchProg('AS', (x) => ({ rewards: { ...(x.rewards || {}), [yr]: { ...(x.rewards?.[yr] || {}), [sp]: ids } } }))}
-        onOpen={open}
-      />
-    ) : (
-      <div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div>
-    );
   } else if (tab === 'tier') {
-    content = <TierView ctx={ctx} goals={goals} stats={stats} head={<Head title="등급 현황" right={avatar} />} onSettings={() => setStack({ name: 'settings' })} friendsBox={{ on: !!social, err: friendsErr, onFriends: () => { loadFriends(true); setStack({ name: 'friends' }); }, onOpen: (uid) => setStack({ name: 'friend', uid }), onMount: () => loadFriends() }} />;
+    const wl = walletOf(profile);
+    const cur = wl.find((w) => w.program === tierProg)?.program || wl[0]?.program;
+    const head = (
+      <>
+        <Head title="등급 현황" right={avatar} />
+        {wl.length > 0 && <ProgSwitch list={wl} value={cur} onChange={(id) => { setTierProg(id); scrollRef.current?.scrollTo?.(0, 0); }} onEdit={() => (cur === 'KE' ? setStack({ name: 'settings' }) : setStack({ name: 'tieradd', program: cur }))} />}
+      </>
+    );
+    if (cur === 'AS' && asProg) {
+      content = (
+        <AlaskaView
+          key="AS"
+          prog={asProg}
+          ctx={ctx}
+          head={head}
+          onSetMethod={(m) => { patchProg('AS', { method: m }); say('적립 방식을 바꿨어요. 2027년 이후 항공편에 적용돼요'); }}
+          onRewards={(yr, sp, ids) => patchProg('AS', (x) => ({ rewards: { ...(x.rewards || {}), [yr]: { ...(x.rewards?.[yr] || {}), [sp]: ids } } }))}
+          onOpen={open}
+        />
+      );
+    } else if (cur === 'KE') {
+    content = <TierView ctx={ctx} goals={goals} stats={stats} head={head} onSettings={() => setStack({ name: 'settings' })} friendsBox={{ on: !!social, err: friendsErr, onFriends: () => { loadFriends(true); setStack({ name: 'friends' }); }, onOpen: (uid) => setStack({ name: 'friend', uid }), onMount: () => loadFriends() }} />;
+    } else {
+      content = <>{head}<div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div></>;
+    }
   } else if (tab === 'cost') {
     content = <CostView ctx={ctx} goals={goals} stats={stats} head={<Head title="마일당 단가" right={avatar} />} onOpen={open} />;
   } else {

@@ -652,3 +652,9 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .spick small { display: block; font-size: 12px; color: var(--ink-2); margin-top: 2px; line-height: 1.45; }
 .spick .ck { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line-2); display: grid; place-items: center; color: var(--navy-btn-ink); }
 .spick button.on .ck { background: var(--navy-btn); border-color: var(--navy-btn); }
+.pswitch { display: flex; align-items: center; gap: 10px; padding: 0 20px 6px; }
+.pchips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+.pchips::-webkit-scrollbar { display: none; }
+.pchips button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 6px; border-radius: 99px; font-size: 13px; font-weight: 700; background: var(--bg-2); color: var(--ink-2); }
+.pchips button.on { background: var(--navy-btn); color: var(--navy-btn-ink); }
+.pswitch .link { font-size: 13px; flex: none; }
