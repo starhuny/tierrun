@@ -530,7 +530,7 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
             <div className="tile"><div className="k">지금 등급</div><div className="v">{s.held.name}</div><div className="s">{prog.validUntil ? `${fmtDot(prog.validUntil)}까지` : '유효기간 미입력'}</div></div>
           </div>
           {s.est > 0 && <div className="notice" style={{ margin: '8px 16px 0' }}>등급 포인트는 금액으로 추정한 값이 {s.est}건 있어요. 숙박 후 아코르 앱 값으로 고치면 정확해져요.</div>}
-          <StayList rows={s.rows} ctx={ctx} title={`${yr}년 숙박`} onOpen={onOpenStay} onAdd={onAddStay} />
+          <StayList rows={s.rows} ctx={ctx} title={`${yr}년 숙박`} onOpen={onOpenStay} onAdd={onAddStay} base={prog.baseDate} />
           <p className="basis">입력한 실제 투숙 박수·포인트(입력한 날까지)에 그 뒤 숙박과 그 해 보너스 박(Explorer·중올플·추가 보너스)을 더해 계산해요. 등급 포인트는 원화 금액을 유로로 바꿔 브랜드별 적립률(10유로당 25·12.5·10·5P)로 추정한 참고값이고, 실제 적립은 아코르 기준이 우선이에요.</p>
         </>
       )}
@@ -608,7 +608,7 @@ function DiamondCard({ s, eur }) {
         <div className="pl num" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 8 }}><span className="muted">{fmtNum(s.conf.points)}{s.plan.points ? ` +${fmtNum(s.plan.points)}` : ''} / {fmtNum(nt.points)}P</span><b>{fmtNum(s.remP)}P 남음</b></div>
         <p className="help" style={{ margin: '8px 0 0' }}>
           {s.remP > 0
-            ? <>박수로는 갈 수 없고, 보통 브랜드(10유로당 25P) 기준 <b>€{fmtNum(c.eur)} · {manwon(c.krw)}</b>을 더 묵어야 해요.{s.plan.points ? ` 예정 숙박까지 넣으면 약 ${manwon(cp.krw)} 남아요.` : ''}</>
+            ? <>박수로는 갈 수 없고, 보통 브랜드(10유로당 25P) 기준 <b>€{fmtNum(c.eur)} · {manwon(c.krw)}</b>을 더 묵어야 해요.{s.plan.points ? ` 예정 숙박까지 넣으면 ${manwon(cp.krw)} 남아요.` : ''}</>
             : '다이아몬드 포인트를 채웠어요.'}
         </p>
       </div>
@@ -616,11 +616,16 @@ function DiamondCard({ s, eur }) {
   );
 }
 
-function StayList({ rows, ctx, title, onOpen, onAdd }) {
+function StayList({ rows, ctx, title, onOpen, onAdd, base }) {
   return (
     <>
       <div className="section-h"><span>{title}</span><span className="faint num">{rows.length}건</span></div>
-      {rows.length ? rows.map((r) => <div key={r.s.id} className="rowwrap"><StayRow s={r.s} ctx={ctx} onClick={() => onOpen(r.s.id)} /></div>) : <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>아직 숙박이 없어요.</p>}
+      {rows.length ? rows.map((r) => (
+        <div key={r.s.id} className="rowwrap">
+          <StayRow s={r.s} ctx={ctx} onClick={() => onOpen(r.s.id)} />
+          {r.included && <div className="incl-note">입력한 {fmtDot(base)} 숫자에 이미 들어 있어서 더하지 않아요</div>}
+        </div>
+      )) : <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>아직 숙박이 없어요.</p>}
       {onAdd && <div className="pad" style={{ marginTop: 10 }}><button className="btn ghost block" onClick={onAdd}><Icon name="plus" size={17} />숙박 추가</button></div>}
     </>
   );
@@ -629,7 +634,7 @@ function StayList({ rows, ctx, title, onOpen, onAdd }) {
 function ComboTab({ prog, s, yr, stays }) {
   // 그 해 실제 숙박 + 기타 보너스(패스트트랙 등)를 두고 멤버십 보너스(Explorer·중올플)만 바꿔 가며 비교
   const v2 = isV2(prog);
-  const real = s.rows.filter((r) => !r.bonus);
+  const real = s.rows.filter((r) => !r.bonus && !r.included);
   const stayN = (v2 ? s.base.nights : 0) + real.reduce((a, r) => a + r.nights, 0);
   const stayP = (v2 ? s.base.points : 0) + real.reduce((a, r) => a + r.points, 0);
   const isMember = (b) => /Explorer|중올플/.test(b.label);

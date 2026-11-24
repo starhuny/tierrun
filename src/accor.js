@@ -80,8 +80,10 @@ export function acYear(prog, stays, yr, today, eur) {
       r.rows.push({ s, nights: n, points: 0, est: false, past: w === 'conf', bonus: true });
       continue;
     }
-    if (year(d) !== yr || !after(d)) continue;
+    if (year(d) !== yr) continue;
     const n = stayNights(s), p = stayPoints(s, eur);
+    // 숫자를 입력한 날까지의 숙박: 이미 입력값에 들어 있으니 목록에만 보여 주고 더하지 않음
+    if (!after(d)) { r.rows.push({ s, nights: n, points: p.pts, est: p.est, past: true, included: true }); continue; }
     const w = d <= today ? 'conf' : 'plan';
     r[w].nights += n;
     r[w].points += p.pts;
