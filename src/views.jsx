@@ -14,6 +14,8 @@ import { walletOf, PROGRAMS, allianceOf } from './wallet.js';
 import { ALLIANCES } from './skypass.js';
 import { flightSP, spFor, METHOD, METHODS, methodFor, asCategory, CAT, isOwn, asSummary, nextTier } from './alaska.js';
 import { AsStrip, ProgSwitch } from './Wallet.jsx';
+import { AcStrip, StayRow } from './Accor.jsx';
+import { stayDate, stayNights, stayPoints, acSummary } from './accor.js';
 
 export const city = (c) => findAirport(c)?.city || c || '?';
 export const routeTitle = (f) => `${city(f.from)} → ${city(f.to)}`;
@@ -154,6 +156,29 @@ export function RowList({ list, ctx, selectedId, onOpen, onDelete, swipe, pickin
   return <div>{out}</div>;
 }
 
+// 항공편과 숙박을 날짜순으로 섞어서 (숙박이 끼어들면 그 앞까지 항공편 묶음을 끊음)
+function MixedList({ list, stays, rp, onStay, desc }) {
+  if (!stays.length) return <RowList list={list} {...rp} />;
+  const out = [];
+  let chunk = [];
+  const flush = () => { if (chunk.length) out.push(<RowList key={`c${out.length}`} list={chunk} {...rp} />); chunk = []; };
+  let i = 0, j = 0;
+  while (i < list.length || j < stays.length) {
+    const st = stays[j], f = list[i];
+    const stayFirst = st && (!f || (desc ? st.checkIn > f.date : st.checkIn < f.date));
+    if (stayFirst) {
+      flush();
+      out.push(<div key={`s${st.id}`} className="rowwrap"><StayRow s={st} ctx={rp.ctx} onClick={() => onStay(st.id)} /></div>);
+      j++;
+    } else {
+      chunk.push(f);
+      i++;
+    }
+  }
+  flush();
+  return <>{out}</>;
+}
+
 // 왼쪽으로 밀면 삭제 버튼이 나옴 (한 번에 하나만 열림)
 const DEL_W = 88;
 function SwipeRow({ id, swipe, onDelete, children }) {
@@ -268,10 +293,11 @@ export function TierCarousel({ ctx, goals, alliance, onProgram, onAddProgram }) 
   const list = alliance === 'ALL' ? all : all.filter((w) => PROGRAMS[w.program]?.alliance === alliance);
   const slides = list.map((w) =>
     w.program === 'KE' ? <TierStrip key="KE" goals={goals} profile={ctx.profile} onClick={() => onProgram('KE')} />
-      : w.program === 'AS' ? <AsStrip key="AS" prog={w} ctx={ctx} onClick={() => onProgram('AS')} /> : null,
+      : w.program === 'AS' ? <AsStrip key="AS" prog={w} ctx={ctx} onClick={() => onProgram('AS')} />
+      : w.program === 'ALL' ? <AcStrip key="ALL" prog={w} ctx={ctx} onClick={() => onProgram('ALL')} /> : null,
   ).filter(Boolean);
   if (!slides.length) {
-    const add = alliance === 'OW' ? ['AS', '원월드', '알래스카 티어를 지갑에 추가해 보세요'] : alliance === 'ST' ? ['KE', '스카이팀', '대한항공 스카이패스를 지갑에 추가해 보세요'] : alliance === 'ALL' ? [null, '티어 지갑', '지갑에 항공사 등급을 추가해 보세요'] : null;
+    const add = alliance === 'OW' ? ['AS', '원월드', '알래스카 티어를 지갑에 추가해 보세요'] : alliance === 'ST' ? ['KE', '스카이팀', '대한항공 스카이패스를 지갑에 추가해 보세요'] : alliance === 'HOTEL' ? ['ALL', '호텔', '아코르 ALL 티어를 지갑에 추가해 보세요'] : alliance === 'ALL' ? [null, '티어 지갑', '지갑에 항공사 등급을 추가해 보세요'] : null;
     slides.push(
       add ? (
         <button key="add" className="strip add" onClick={() => onAddProgram(add[0])}>
@@ -301,16 +327,22 @@ export function TierCarousel({ ctx, goals, alliance, onProgram, onAddProgram }) 
   );
 }
 
-const CHIPS = [['ALL', '전체'], ...ALLIANCES.map((a) => [a.id, a.short || a.name])];
+const CHIPS = [['ALL', '전체'], ...ALLIANCES.map((a) => [a.id, a.short || a.name]), ['HOTEL', '호텔']];
 
 /* ───────── 항공편 목록 ───────── */
-export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onProgram, onAddProgram, alliance = 'ALL', setAlliance, onAircraft, picking, setPicking, onGroup, head, banner }) {
+export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onProgram, onAddProgram, onOpenStay, onAddStay, alliance = 'ALL', setAlliance, onAircraft, picking, setPicking, onGroup, head, banner }) {
   const { flights, today } = ctx;
   const [showPast, setShowPast] = useState(false);
   const [openId, setOpenId] = useState(null);
   const swipe = { open: openId, setOpen: setOpenId };
   const pickOne = (id) => setPicking((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const sorted = useMemo(() => sortFlights(alliance === 'ALL' ? flights : flights.filter((f) => allianceOf(f) === alliance)), [flights, alliance]);
+  // 숙박: 전체·호텔에서만, 피킹(여정 묶기) 중에는 숨김
+  const stays = ctx.stays || [];
+  const showStays = !picking && (alliance === 'ALL' || alliance === 'HOTEL');
+  const stUp = showStays ? stays.filter((x) => stayDate(x) >= today).sort((a, b) => a.checkIn.localeCompare(b.checkIn)) : [];
+  const stPast = showStays ? stays.filter((x) => stayDate(x) < today).sort((a, b) => b.checkIn.localeCompare(a.checkIn)) : [];
+  const chips = CHIPS.filter(([id]) => id !== 'HOTEL' || ctx.acProg || stays.length);
   const upcoming = sorted.filter((f) => f.date >= today);
   const past = sorted.filter((f) => f.date < today).reverse();
   return (
@@ -319,7 +351,7 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
       {banner}
       <TierCarousel ctx={ctx} goals={goals} alliance={alliance} onProgram={onProgram} onAddProgram={onAddProgram} />
       {flights.length > 0 && onAircraft && <AircraftStrip flights={flights} today={today} onClick={onAircraft} />}
-      {!flights.length ? (
+      {!flights.length && !stays.length ? (
         <div className="empty fade-in">
           <svg width="150" height="70" viewBox="0 0 150 70" aria-hidden="true">
             <path d="M12 58 Q75 -10 138 58" fill="none" stroke="var(--sky)" strokeWidth="2.5" strokeDasharray="5 6" strokeLinecap="round" />
@@ -346,7 +378,7 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
                 {setPicking && flights.length > 1 && <button className="btn sm sky" onClick={() => { setPicking(new Set()); setShowPast(true); }}><Icon name="list" size={15} />{setAlliance ? '여정으로 묶기' : '골라서 여정으로 묶기'}</button>}
                 {setAlliance && (
                   <div className="achips" role="tablist" aria-label="얼라이언스">
-                    {CHIPS.map(([id, label]) => (
+                    {chips.map(([id, label]) => (
                       <button key={id} role="tab" aria-selected={alliance === id} className={alliance === id ? 'on' : ''} onClick={() => setAlliance(id)}>{label}</button>
                     ))}
                   </div>
@@ -354,15 +386,32 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
               </>
             )}
           </div>
-          <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{upcoming.length}편</span></div>
-          {upcoming.length ? <RowList list={upcoming} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} picking={picking} onPick={pickOne} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>{alliance === 'ALL' ? '예정된 항공편이 없어요.' : `예정된 ${CHIPS.find((c) => c[0] === alliance)?.[1]} 항공편이 없어요.`}</p>}
-          {past.length > 0 && (
-            <>
-              <div className="section-h"><span>지난 항공편</span><span className="faint num">{past.length}편</span></div>
-              <RowList list={showPast ? past : past.slice(0, 4)} ctx={ctx} selectedId={selectedId} onOpen={onOpen} onDelete={onDelete} swipe={swipe} picking={picking} onPick={pickOne} />
-              {past.length > 4 && <button className="btn sm ghost more" onClick={() => setShowPast((v) => !v)}>{showPast ? '접기' : `지난 항공편 ${past.length - 4}편 더 보기`}</button>}
-            </>
-          )}
+          {(() => {
+            const rp = { ctx, selectedId, onOpen, onDelete, swipe, picking, onPick: pickOne };
+            const what = alliance === 'HOTEL' ? '숙박' : stays.length && alliance === 'ALL' ? '일정' : '항공편';
+            const cnt = (f, st) => [f ? `${f}편` : '', st ? `숙박 ${st}` : ''].filter(Boolean).join(' · ') || '0';
+            const pastN = past.length + stPast.length;
+            // 지난 것: 항공편·숙박을 합쳐 최근 4건만 먼저
+            const merged = [...past.map((f) => ({ k: 'f', d: f.date, x: f })), ...stPast.map((x) => ({ k: 's', d: x.checkIn, x }))]
+              .sort((a, b) => b.d.localeCompare(a.d) || (a.k === b.k ? 0 : a.k === 'f' ? -1 : 1));
+            const shown = showPast ? merged : merged.slice(0, 4);
+            const pastF = shown.filter((m) => m.k === 'f').map((m) => m.x);
+            const pastS = shown.filter((m) => m.k === 's').map((m) => m.x);
+            return (
+              <>
+                <div className="section-h"><span>다가오는 {what}</span><span className="faint num">{cnt(upcoming.length, stUp.length)}</span></div>
+                {upcoming.length || stUp.length ? <MixedList list={upcoming} stays={stUp} rp={rp} onStay={onOpenStay} /> : <p className="pad muted" style={{ margin: '4px 20px 10px' }}>{alliance === 'ALL' ? '예정된 항공편이 없어요.' : alliance === 'HOTEL' ? '예정된 숙박이 없어요.' : `예정된 ${CHIPS.find((c) => c[0] === alliance)?.[1]} 항공편이 없어요.`}</p>}
+                {alliance === 'HOTEL' && onAddStay && <div className="pad" style={{ margin: '8px 0' }}><button className="btn ghost block" onClick={onAddStay}><Icon name="plus" size={17} />숙박 추가</button></div>}
+                {pastN > 0 && (
+                  <>
+                    <div className="section-h"><span>지난 {what}</span><span className="faint num">{cnt(past.length, stPast.length)}</span></div>
+                    <MixedList list={pastF} stays={pastS} rp={rp} onStay={onOpenStay} desc />
+                    {pastN > 4 && <button className="btn sm ghost more" onClick={() => setShowPast((v) => !v)}>{showPast ? '접기' : `지난 ${what} ${pastN - 4}건 더 보기`}</button>}
+                  </>
+                )}
+              </>
+            );
+          })()}
           {onDelete && !picking && <p className="help" style={{ margin: '14px 20px 0', textAlign: 'center' }}>항공편을 왼쪽으로 밀면 바로 삭제할 수 있어요.</p>}
           {picking && <PickBar flights={sorted} picking={picking} setPicking={setPicking} onGroup={onGroup} />}
           {onFlighty && <button className="link imp-link" onClick={onFlighty}>Flighty 기록 가져오기</button>}
@@ -763,13 +812,14 @@ export function TierView({ ctx, goals, stats, head, onSettings, friendsBox }) {
 }
 
 /* ───────── 비용 ───────── */
-export function CostView({ ctx, goals, stats: keStats, asStats, avatar, onOpen }) {
+export function CostView({ ctx, goals, stats: keStats, asStats, avatar, onOpen, onOpenStay }) {
   const { today, profile, asProg } = ctx;
   // 스카이패스(마일당) ↔ 알래스카(포인트당): 지갑 순서대로, 기본은 1순위
-  const modes = walletOf(profile).map((w) => w.program).filter((p) => p === 'KE' || (p === 'AS' && asProg));
+  const modes = walletOf(profile).map((w) => w.program).filter((p) => p === 'KE' || (p === 'AS' && asProg) || (p === 'ALL' && ctx.acProg));
   const [mode0, setMode] = useState(null);
   const mode = modes.includes(mode0) ? mode0 : modes[0] || 'KE';
   const isAS = mode === 'AS';
+  const isAC = mode === 'ALL';
   const stats = isAS ? asStats : keStats;
   const U = isAS ? '포인트' : '마일';
   const per = (v) => `${fmtWon(v)}/${U}`;
@@ -835,6 +885,15 @@ export function CostView({ ctx, goals, stats: keStats, asStats, avatar, onOpen }
       <Bar conf={g.perMile / maxPM} thin />
     </button>
   );
+  if (isAC) {
+    return (
+      <>
+        <Head title="박당 단가" right={avatar} />
+        {modes.length > 1 && <ProgSwitch list={modes.map((p) => ({ program: p }))} value={mode} onChange={setMode} />}
+        <AccorCost ctx={ctx} onOpenStay={onOpenStay} />
+      </>
+    );
+  }
   return (
     <>
       <Head title={isAS ? '포인트당 단가' : '마일당 단가'} right={avatar} />
@@ -898,6 +957,62 @@ export function CostView({ ctx, goals, stats: keStats, asStats, avatar, onOpen }
         </>
       )}
       {profile?.sample && <p className="basis">예시 데이터예요. 설정에서 지우고 내 항공편으로 시작할 수 있어요.</p>}
+    </>
+  );
+}
+
+// 아코르: 박당 단가·등급 포인트당 단가
+function AccorCost({ ctx, onOpenStay }) {
+  const eur = ctx.acProg?.eur;
+  const rows = (ctx.stays || []).map((x) => ({ s: x, n: stayNights(x), p: stayPoints(x, eur).pts, krw: +x.krw || 0 })).filter((r) => r.krw > 0 && r.n > 0);
+  const tot = rows.reduce((a, r) => ({ krw: a.krw + r.krw, n: a.n + r.n, p: a.p + r.p }), { krw: 0, n: 0, p: 0 });
+  const byN = [...rows].sort((a, b) => a.krw / a.n - b.krw / b.n);
+  const unpriced = (ctx.stays || []).filter((x) => !(+x.krw > 0));
+  const s = acSummary(ctx.acProg, ctx.stays || [], ctx.today, undefined, eur);
+  const perN = tot.n ? tot.krw / tot.n : null;
+  return (
+    <>
+      <div className="hero-num num">
+        <div className="faint" style={{ fontSize: 13, fontWeight: 700 }}>아코르 평균 박당 단가</div>
+        <div className="v">{perN ? fmtWon(perN) : '–'}<small>/박</small></div>
+        <div className="s">{rows.length ? `금액 입력한 ${rows.length}건 · 총 ${fmtWon(tot.krw)} · ${fmtNum(tot.n)}박 · ${fmtNum(tot.p)}P` : '숙박에 금액을 넣으면 박당 단가를 계산해요.'}</div>
+        {tot.p > 0 && <div className="s">등급 포인트 1점당 {fmtWon(tot.krw / tot.p)}</div>}
+      </div>
+      {perN && s.next && s.remNPlan != null && s.remNPlan > 0 && (
+        <div className="pad" style={{ marginTop: 10 }}>
+          <div className="card" style={{ background: 'var(--sky-soft)', border: 0 }}>
+            <div className="card-h" style={{ color: 'var(--sky-ink)' }}>{s.year}년 {s.goal}까지 예상 비용</div>
+            <div className="num" style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.03em' }}>약 {fmtWonShort(perN * s.remNPlan)}</div>
+            <div className="help num">예정 숙박·보너스 이후 남은 {fmtNum(s.remNPlan)}박 × 평균 {fmtWon(perN)}/박</div>
+          </div>
+        </div>
+      )}
+      <div className="section-h"><span>숙박별 단가</span><span className="faint">박당 낮은 순</span></div>
+      {byN.length === 0 && <p className="muted" style={{ margin: '4px 20px' }}>금액이 입력된 숙박이 아직 없어요.</p>}
+      {byN.map((r) => (
+        <button key={r.s.id} className="trow num" onClick={() => onOpenStay?.(r.s.id)}>
+          <div>
+            <div className="rt">{r.s.hotel}</div>
+            <div className="dt">{fmtDate(r.s.checkIn, { weekday: false })} · {r.n}박 · {r.s.brand}</div>
+          </div>
+          <div>
+            <div className="pm">{fmtWon(r.krw / r.n)}</div>
+            <div className="sub">{fmtWonShort(r.krw)} · {r.p > 0 ? `${fmtWon(r.krw / r.p)}/P` : '–'}</div>
+          </div>
+          <Bar conf={(r.krw / r.n) / Math.max(1, ...byN.map((x) => x.krw / x.n))} thin />
+        </button>
+      ))}
+      {unpriced.length > 0 && (
+        <>
+          <div className="section-h"><span>금액 미입력</span><span className="faint">{unpriced.length}건</span></div>
+          {unpriced.map((x) => (
+            <button className="trow num" key={x.id} onClick={() => onOpenStay?.(x.id)}>
+              <div><div className="rt">{x.hotel}</div><div className="dt">{fmtDate(x.checkIn, { weekday: false })} · {stayNights(x)}박</div></div>
+              <div className="sub" style={{ alignSelf: 'center' }}>입력하기 <Icon name="chev" size={14} /></div>
+            </button>
+          ))}
+        </>
+      )}
     </>
   );
 }

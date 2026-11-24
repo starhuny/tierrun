@@ -46,6 +46,7 @@ LAYOUT 데스크톱/패드: 지구본 전체 + 왼쪽 떠 있는 패널 / 모바
   --map-halo: light-dark(rgba(255, 255, 255, 0.92), rgba(8, 14, 40, 0.85));
   --map-pill: light-dark(#0c1d55, #e9eefc);
   --map-pill-ink: light-dark(#ffffff, #0c1d55);
+  --map-hotel: light-dark(#6d3fc0, #c4a3ff);
   --r: 18px;
   --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
 }
@@ -666,3 +667,13 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .yr-rule span { font-size: 12px; opacity: 0.85; }
 .yr-rule.y26 { background: light-dark(#fdf3e4, #3a2c14); color: light-dark(#7a4a0c, #f5cf8f); }
 .yr-rule.y27 { background: light-dark(#dfeef7, #0f3550); color: light-dark(#01426a, #9fd2f5); }
+.mark.allmark { background: #1e1852; color: #fff; font-weight: 900; letter-spacing: -0.04em; }
+
+.strip.ac { background: linear-gradient(120deg, light-dark(#ece6f8, #2a2150), var(--panel) 70%); }
+.badge.cr-ALL { background: light-dark(#ece6f8, #2a2150); color: light-dark(#4b2a8c, #cdb6ff); }
+.mark.bed { background: var(--map-hotel); color: #fff; }
+.fastrow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.stayrow .ftitle { font-size: 17px; }
+.add-menu { position: absolute; right: 0; bottom: 74px; display: grid; gap: 6px; padding: 8px; border-radius: 18px; background: var(--panel); box-shadow: var(--shadow); z-index: 7; min-width: 170px; }
+.add-menu button { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; font-weight: 700; font-size: 15px; text-align: left; }
+.add-menu button:hover { background: var(--bg-2); }

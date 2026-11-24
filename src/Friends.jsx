@@ -6,6 +6,7 @@ import { Icon, AirlineMark, Bar } from './ui.jsx';
 import { inviteLink, flightKey } from './social.js';
 import { aircraftTop } from './aircraft.js';
 import { AS_TIER } from './alaska.js';
+import { AC_TIER } from './accor.js';
 import { CardFace } from './Wallet.jsx';
 import Globe from './Globe.jsx';
 
@@ -25,8 +26,26 @@ const pct = (x) => `${Math.floor((x || 0) * 1000) / 10}%`;
 // 친구가 정한 지갑 순서 (예전 버전 친구는 스카이패스 먼저)
 const orderOf = (fr) => {
   const o = Array.isArray(fr.order) ? fr.order : [...(fr.ke === false ? [] : ['KE']), ...(fr.wallet || []).map((w) => w.program)];
-  return o.filter((p) => p === 'KE' || (p === 'AS' && asOf(fr)));
+  return o.filter((p) => p === 'KE' || (p === 'AS' && asOf(fr)) || (p === 'ALL' && acOf(fr)));
 };
+const acOf = (fr) => (fr.wallet || []).find((w) => w.program === 'ALL' && AC_TIER[w.tier]) || null;
+// 아코르 진행률 요약 (박·포인트 중 가까운 쪽)
+function acInfo(w) {
+  const at = AC_TIER[w.tier];
+  const nt = w.next ? AC_TIER[w.next] : null;
+  const pn = nt && w.nextNights ? Math.min(1, w.nights / w.nextNights) : 0;
+  const pp = nt ? Math.min(1, w.points / w.nextPoints) : 1;
+  const an = nt && w.nextNights ? Math.min(1, w.allNights / w.nextNights) : 0;
+  const ap = nt ? Math.min(1, w.allPoints / w.nextPoints) : 1;
+  const byN = !!(nt && w.nextNights) && an >= ap;
+  const remN = nt && w.nextNights ? Math.max(0, w.nextNights - w.nights) : null;
+  const remP = nt ? Math.max(0, w.nextPoints - w.points) : 0;
+  return { at, nt, conf: byN ? pn : pp, all: byN ? an : ap, label: w.goal || nt?.name || '', rem: nt ? (remN != null ? `${fmtNum(remN)}박 또는 ${fmtNum(remP)}P` : `${fmtNum(remP)}P`) : '' };
+}
+function AcChip({ w }) {
+  const at = AC_TIER[w.tier];
+  return <span className="tier-chip" style={{ background: at.bg, color: at.ink }}>아코르 {at.name}</span>;
+}
 const asOf = (fr) => (fr.wallet || []).find((w) => w.program === 'AS' && AS_TIER[w.tier]) || null;
 // 알래스카 진행률 요약
 function asInfo(w) {
@@ -62,11 +81,19 @@ export function FriendRow({ fr, ctx, onClick, right }) {
         <span className="fr-mid">
           <span className="fr-top">
             <b>{fr.name || '이름 없음'}</b>
-            {orderOf(fr).map((p) => (p === 'KE' ? <KeChip key="KE" fr={fr} /> : <AsChip key="AS" w={asOf(fr)} />))}
+            {orderOf(fr).map((p) => (p === 'KE' ? <KeChip key="KE" fr={fr} /> : p === 'ALL' ? <AcChip key="ALL" w={acOf(fr)} /> : <AsChip key="AS" w={asOf(fr)} />))}
           </span>
           {fr.missing ? (
             <span className="fr-sub">아직 티어런 정보가 올라오지 않았어요</span>
-          ) : orderOf(fr)[0] === 'AS' ? (() => {
+          ) : orderOf(fr)[0] === 'ALL' ? (() => {
+            const x = acInfo(acOf(fr));
+            return x.nt ? (
+              <>
+                <span className="fr-sub num">아코르 {x.label}까지 <b>{pct(x.conf)}</b> · {x.rem} 남음</span>
+                <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} thin />
+              </>
+            ) : <span className="fr-sub">아코르 최고 등급 달성</span>;
+          })() : orderOf(fr)[0] === 'AS' ? (() => {
             const x = asInfo(asOf(fr));
             return x.nt ? (
               <>
@@ -279,7 +306,34 @@ export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
                 </div>
               </div>
             </Fragment>
-          ) : (() => {
+          ) : p === 'ALL' ? (() => {
+            const w = acOf(fr);
+            const x = acInfo(w);
+            return (
+              <Fragment key="ALL">
+                {i === 0 && (
+                  <div className="pad" style={{ marginTop: 10 }}>
+                    <CardFace
+                      bg={x.at.bg} ink={x.at.ink} en="ACCOR · ALL" title={x.at.en} airline="ALL"
+                      sub={w.validUntil ? `${fmtDot(w.validUntil)}까지` : '호텔'}
+                      foot={<div className="wline"><span>{fr.name}</span><span>{w.year} · {fmtNum(w.nights)}박 · {fmtNum(w.points)}P</span></div>}
+                      conf={x.conf} plan={Math.max(0, x.all - x.conf)}
+                    />
+                  </div>
+                )}
+                <div className="pad" style={{ marginTop: i === 0 ? 12 : 10 }}>
+                  <div className="card">
+                    <div className="card-h">
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="ALL" size="xs" />{i === 0 && x.nt ? `${x.label}까지` : '아코르 ALL'}</span>
+                      {i === 0 ? <b className="num" style={{ color: 'var(--ink)', fontSize: 18 }}>{x.nt ? pct(x.conf) : '달성'}</b> : <AcChip w={w} />}
+                    </div>
+                    <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} done={!x.nt} />
+                    <div className="help num" style={{ marginTop: 8 }}>{w.year}년 {fmtNum(w.nights)}박 · {fmtNum(w.points)}P{x.nt ? ` · ${x.label}까지 ${x.rem} 남음` : ' · 최고 등급 달성'}</div>
+                  </div>
+                </div>
+              </Fragment>
+            );
+          })() : (() => {
             const w = asOf(fr);
             const x = asInfo(w);
             return (

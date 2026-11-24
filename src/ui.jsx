@@ -24,6 +24,7 @@ const P = {
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-5v-5m0-3h.01',
   cloud: 'M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6 9.5 4.3 4.3 0 0 0 7 18z',
   copy: 'M9 9h10v10H9zM5 15V5h10',
+  bed: 'M3 18V6M3 14h18v4M21 18v-4.5a2.5 2.5 0 0 0-2.5-2.5H11v3M7 11.5a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4z',
   wallet: 'M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3M4 7.5V17a2 2 0 0 0 2 2h14V9H6.5A2.5 2.5 0 0 1 4 7.5zM16 14h.01',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
 };
@@ -46,6 +47,10 @@ export function AirlineMark({ code, size }) {
   const c = String(code || '').toUpperCase();
   const [step, setStep] = useState(() => logoFail.get(c) || 0);
   const cls = `mark ${size === 'sm' ? 'sm' : size === 'xs' ? 'xs' : ''}`;
+  // 아코르 ALL (호텔 프로그램) 마크
+  if (c === 'ALL') {
+    return <span className={`${cls} allmark`} title="아코르 ALL">ALL</span>;
+  }
   if (CUSTOM_LOGO[c]) {
     return (
       <span className={`${cls} logo`} title={a?.name || c}>
@@ -289,3 +294,26 @@ export function DateInput({ value, onChange, type = 'date', placeholder, invalid
     </span>
   );
 }
+
+/* ───────── 카드 모양 ───────── */
+export function CardFace({ bg, ink, en, title, sub, gem, airline, foot, conf, plan, compact }) {
+  return (
+    <div className={`wface ${compact ? 'compact' : ''}`} style={{ background: bg, color: ink }}>
+      <div className="wtop">
+        <div>
+          <div className="en">{en}</div>
+          <div className="ko">{title}{gem && <i className="gem" style={{ background: gem }} />}</div>
+          {sub && <div className="sub">{sub}</div>}
+        </div>
+        {airline && <AirlineMark code={airline} size="sm" />}
+      </div>
+      {!compact && (
+        <div className="wfoot num">
+          {foot}
+          {conf != null && <Bar conf={conf} plan={plan || 0} thin />}
+        </div>
+      )}
+    </div>
+  );
+}
+

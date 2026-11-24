@@ -7,6 +7,7 @@ import { AIRLINE } from './skypass.js';
 export const PROGRAMS = {
   KE: { id: 'KE', name: '대한항공 스카이패스', short: '스카이패스', airline: 'KE', alliance: 'ST' },
   AS: { id: 'AS', name: '알래스카 Atmos 리워드', short: '알래스카', airline: 'AS', alliance: 'OW' },
+  ALL: { id: 'ALL', name: '아코르 ALL', short: '아코르', airline: 'ALL', alliance: 'HOTEL', hotel: true },
   TK: { id: 'TK', name: '터키항공 Miles&Smiles', short: '터키항공', airline: 'TK', alliance: 'SA', soon: true },
 };
 export const PROGRAM_LIST = Object.values(PROGRAMS);

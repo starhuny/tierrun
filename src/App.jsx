@@ -11,6 +11,7 @@ import { AircraftView } from './Aircraft.jsx';
 import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
 import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './Wallet.jsx';
+import { AccorAddView, AccorView, StayForm } from './Accor.jsx';
 import { walletOf, progEntry, hasProgram } from './wallet.js';
 import { flightSP } from './alaska.js';
 
@@ -183,14 +184,14 @@ export default function App() {
   // 친구에게 보여줄 요약 올리기 (바뀌었을 때만)
   useEffect(() => {
     if (!social || !profile || profile.sample) return;
-    const sum = buildPublic({ profile, user: ad.user, flights, goals, today });
+    const sum = buildPublic({ profile, user: ad.user, flights, goals, today, stays: state.stays || [] });
     const json = JSON.stringify(sum);
     if (json === lastPub.current) return;
     const t = setTimeout(() => {
       social.publish(sum).then(() => { lastPub.current = json; }).catch(() => {});
     }, 1500);
     return () => clearTimeout(t);
-  }, [social, profile, flights, goals, today, ad]);
+  }, [social, profile, flights, goals, today, ad, state.stays]);
   const together = useMemo(() => togetherMap(flights, friends, today), [flights, friends, today]);
   // 새 버전 배포 알림 (열어 둔 화면이 예전 버전이면 새로고침 안내)
   const [newVer, setNewVer] = useState(false);
@@ -226,7 +227,9 @@ export default function App() {
   };
 
   const asProg = progEntry(profile, 'AS');
-  const ctx = { flights, trips, profile, today, user: ad?.user, together, friends, asProg };
+  const acProg = progEntry(profile, 'ALL');
+  const stays = state.stays || [];
+  const ctx = { flights, trips, profile, today, user: ad?.user, together, friends, asProg, acProg, stays };
   const [alliance, setAlliance] = useState('ALL');
   const [setupPick, setSetupPick] = useState(null); // 처음 설정: { name, programs }
   const [tierProg, setTierProg] = useState(null); // 등급 현황 탭에서 보는 프로그램 (없으면 지갑 첫 카드)
@@ -239,7 +242,7 @@ export default function App() {
     setTab('tier');
     scrollRef.current?.scrollTo?.(0, 0);
   };
-  const saveTier = (entry, { convert = [] } = {}) => {
+  const saveTier = (entry, { convert = [] } = {}, queue = []) => {
     const conv = new Set(convert);
     const isNew = !progEntry(profile, entry.program);
     setState((s) => {
@@ -250,20 +253,27 @@ export default function App() {
       return { ...s, profile: { ...base, wallet: next }, flights: s.flights.map((f) => (conv.has(f.id) ? { ...f, program: entry.program, credit: 'NONE' } : f)) };
     });
     setSetupPick(null);
+    const nm = { AS: '알래스카', ALL: '아코르' }[entry.program] || '';
+    // 처음 설정에서 여러 개 골랐으면 다음 것으로
+    if (queue.length) {
+      setStack({ name: 'tieradd', program: queue[0], queue: queue.slice(1) });
+      say(`${nm} 설정 완료! 이어서 ${{ AS: '알래스카', ALL: '아코르' }[queue[0]]}를 설정해요`);
+      return;
+    }
     setTierProg(entry.program);
     setStack(null);
     setTab('tier');
-    say(isNew ? `지갑에 알래스카 티어를 추가했어요${conv.size ? ` · 원월드 ${conv.size}편을 알래스카로 적립` : ''}` : '저장했어요');
+    say(isNew ? `지갑에 ${nm} 티어를 추가했어요${conv.size ? ` · 원월드 ${conv.size}편을 알래스카로 적립` : ''}` : '저장했어요');
   };
   const removeTier = (program) => {
     setState((s) => ({
       ...s,
       profile: { ...s.profile, wallet: walletOf(s.profile).filter((x) => x.program !== program) },
-      flights: program === 'KE' ? s.flights : s.flights.map((f) => (f.program === program ? { ...f, program: 'KE', credit: defaultCredit(f.airline) } : f)),
+      flights: program === 'KE' || program === 'ALL' ? s.flights : s.flights.map((f) => (f.program === program ? { ...f, program: 'KE', credit: defaultCredit(f.airline) } : f)),
     }));
     setTierProg(null);
     setStack({ name: 'wallet' });
-    say(program === 'KE' ? '스카이패스를 지갑에서 뺐어요. 항공편 기록은 그대로예요' : '지갑에서 뺐어요. 해당 항공편은 스카이패스 항공편으로 돌아갔어요');
+    say(program === 'KE' ? '스카이패스를 지갑에서 뺐어요. 항공편 기록은 그대로예요' : program === 'ALL' ? '아코르를 지갑에서 뺐어요. 숙박 기록은 그대로예요' : '지갑에서 뺐어요. 해당 항공편은 스카이패스 항공편으로 돌아갔어요');
   };
   // 지갑에 스카이패스 추가 (알래스카만으로 시작한 경우)
   const addProgram = (id) => {
@@ -285,6 +295,23 @@ export default function App() {
     if (!mobile) setSel(null);
   };
   const addNew = () => setStack({ name: 'form' });
+  // + 버튼: 아코르가 지갑에 있으면 항공편·숙박 중 고르기
+  const [addMenu, setAddMenu] = useState(false);
+  const onFab = () => (acProg || (state.stays || []).length ? setAddMenu((v) => !v) : addNew());
+  const saveStay = (st) => {
+    setState((s) => {
+      const list = s.stays || [];
+      return { ...s, stays: list.some((x) => x.id === st.id) ? list.map((x) => (x.id === st.id ? st : x)) : [...list, st] };
+    });
+    setStack(null);
+    say(`숙박 저장 · ${st.hotel}`);
+  };
+  const deleteStay = (id) => {
+    const old = (state.stays || []).find((x) => x.id === id);
+    setState((s) => ({ ...s, stays: (s.stays || []).filter((x) => x.id !== id) }));
+    setStack(null);
+    say('숙박을 삭제했어요', () => { setState((s) => ({ ...s, stays: [...(s.stays || []), old] })); setToast(null); });
+  };
   const editTrip = (f) => setStack({ name: 'form', tripId: f.tripId, flightId: f.id });
 
   // 여정 정리: 항공편이 하나도 없는 여정은 지우고, 한 편만 남은 여정은 편도로
@@ -409,13 +436,13 @@ export default function App() {
   };
   const loadSample = () => {
     const s = sampleState(today);
-    setState((cur) => ({ profile: cur.profile && !cur.profile.sample ? cur.profile : s.profile, flights: s.flights, trips: s.trips }));
+    setState((cur) => ({ profile: cur.profile && !cur.profile.sample ? cur.profile : s.profile, flights: s.flights, trips: s.trips, stays: cur.stays || [] }));
     setStack(null);
     setTab('flights');
     say('예시 데이터를 불러왔어요');
   };
   const clearSample = () => {
-    setState({ profile: null, flights: [], trips: {} });
+    setState({ profile: null, flights: [], trips: {}, stays: [] });
     setStack(null);
   };
 
@@ -475,7 +502,7 @@ export default function App() {
   const view = !setupNeeded ? stack
     : !setupPick ? { name: 'setupStart' }
     : setupPick.programs.includes('KE') ? { name: 'settings', setup: true }
-    : { name: 'tieradd', program: 'AS', setup: true };
+    : { name: 'tieradd', program: setupPick.programs[0], setup: true, queue: setupPick.programs.slice(1) };
   const panelW = Math.min(420, Math.max(340, vw * 0.31));
   const onMap = mobile && tab === 'map' && !view;
   const selFlight = (sel && flights.find((f) => f.id === sel)) || sortFlights(flights).find((f) => f.date >= today) || sortFlights(flights).at(-1) || null;
@@ -502,12 +529,12 @@ export default function App() {
         isSetup={!!view.setup}
         hasFlights={flights.length > 0}
         onSave={(p) => {
-          const nextAS = view.setup && setupPick?.programs.includes('AS');
+          const rest = view.setup ? (setupPick?.programs || []).filter((x) => x !== 'KE') : [];
           setState((s) => ({ ...s, profile: { ...p, invite: p.invite || s.profile?.invite, ...(view.setup ? { wallet: [{ program: 'KE' }] } : {}) } }));
           setSetupPick(null);
-          if (nextAS) {
-            setStack({ name: 'tieradd', program: 'AS' });
-            say('스카이패스 설정 완료! 이어서 알래스카를 설정해요');
+          if (rest.length) {
+            setStack({ name: 'tieradd', program: rest[0], queue: rest.slice(1) });
+            say(`스카이패스 설정 완료! 이어서 ${{ AS: '알래스카', ALL: '아코르' }[rest[0]]}를 설정해요`);
             return;
           }
           setStack(null);
@@ -522,14 +549,14 @@ export default function App() {
           try {
             const d = JSON.parse(txt);
             if (!Array.isArray(d.flights)) return false;
-            setState({ profile: d.profile || profile, flights: d.flights, trips: d.trips || {} });
+            setState({ profile: d.profile || profile, flights: d.flights, trips: d.trips || {}, stays: d.stays || [] });
             return true;
           } catch {
             return false;
           }
         }}
         onReset={() => {
-          setState({ profile: null, flights: [], trips: {} });
+          setState({ profile: null, flights: [], trips: {}, stays: [] });
           setStack(null);
         }}
         onSignOut={async () => {
@@ -556,6 +583,28 @@ export default function App() {
         onClose={() => setStack(null)}
       />
     );
+  } else if (view?.name === 'tieradd' && view.program === 'ALL') {
+    content = (
+      <AccorAddView
+        key="ALL"
+        entry={progEntry(profile, 'ALL')}
+        ctx={ctx}
+        onSave={(e) => saveTier(e, {}, view.queue || [])}
+        onDelete={() => removeTier('ALL')}
+        onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, 'ALL') && view.from !== 'wallet' ? null : { name: 'wallet' }))}
+      />
+    );
+  } else if (view?.name === 'stay') {
+    content = (
+      <StayForm
+        key={view.id || 'new'}
+        initial={view.id ? stays.find((x) => x.id === view.id) : null}
+        ctx={ctx}
+        onSave={saveStay}
+        onDelete={deleteStay}
+        onCancel={() => setStack(view.back ? { name: view.back } : null)}
+      />
+    );
   } else if (view?.name === 'tieradd') {
     content = (
       <TierAddView
@@ -563,7 +612,7 @@ export default function App() {
         program={view.program}
         entry={progEntry(profile, view.program)}
         ctx={ctx}
-        onSave={saveTier}
+        onSave={(e, o) => saveTier(e, o, view.queue || [])}
         onDelete={() => removeTier(view.program)}
         onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, view.program) && view.from !== 'wallet' ? null : { name: 'wallet' }))}
       />
@@ -611,7 +660,19 @@ export default function App() {
         {wl.length > 0 && <ProgSwitch list={wl} value={cur} onChange={(id) => { setTierProg(id); scrollRef.current?.scrollTo?.(0, 0); }} onEdit={() => (cur === 'KE' ? setStack({ name: 'settings' }) : setStack({ name: 'tieradd', program: cur }))} />}
       </>
     );
-    if (cur === 'AS' && asProg) {
+    if (cur === 'ALL' && acProg) {
+      content = (
+        <AccorView
+          key="ALL"
+          prog={acProg}
+          ctx={ctx}
+          head={head}
+          footer={<FriendsSection ctx={ctx} box={friendsBox} />}
+          onOpenStay={(id) => setStack({ name: 'stay', id })}
+          onAddStay={() => setStack({ name: 'stay' })}
+        />
+      );
+    } else if (cur === 'AS' && asProg) {
       content = (
         <AlaskaView
           key="AS"
@@ -630,7 +691,7 @@ export default function App() {
       content = <>{head}<div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div><FriendsSection ctx={ctx} box={friendsBox} /></>;
     }
   } else if (tab === 'cost') {
-    content = <CostView ctx={ctx} goals={goals} stats={stats} asStats={asStats} avatar={avatar} onOpen={open} />;
+    content = <CostView ctx={ctx} goals={goals} stats={stats} asStats={asStats} avatar={avatar} onOpen={open} onOpenStay={(id) => setStack({ name: 'stay', id })} />;
   } else {
     content = (
       <FlightsView
@@ -645,6 +706,8 @@ export default function App() {
         onDelete={swipeDelete}
         onProgram={openProgram}
         onAddProgram={(id) => (id ? addProgram(id) : setStack({ name: 'wallet' }))}
+        onOpenStay={(id) => setStack({ name: 'stay', id })}
+        onAddStay={() => setStack({ name: 'stay' })}
         alliance={alliance}
         setAlliance={setAlliance}
         picking={picking}
@@ -669,7 +732,13 @@ export default function App() {
           </button>
         ))}
       </div>
-      <button className="fab" onClick={addNew} aria-label="항공편 추가"><Icon name="plus" size={26} stroke={2.4} /></button>
+      <button className="fab" onClick={onFab} aria-label="추가" aria-expanded={addMenu}><Icon name="plus" size={26} stroke={2.4} /></button>
+      {addMenu && (
+        <div className="add-menu" role="menu">
+          <button role="menuitem" onClick={() => { setAddMenu(false); addNew(); }}><Icon name="plane" size={18} />항공편 추가</button>
+          <button role="menuitem" onClick={() => { setAddMenu(false); setStack({ name: 'stay' }); }}><Icon name="bed" size={18} />숙박 추가</button>
+        </div>
+      )}
     </nav>
   );
 
@@ -683,12 +752,13 @@ export default function App() {
         <div className="map-layer" id="map">
           <Globe
             flights={frFlights || flights}
+            pins={frFlights ? [] : stays.filter((x) => x.city).map((x) => ({ id: `st-${x.id}`, code: x.city }))}
             selectedId={frFlights ? null : sel}
             onSelect={(id) => (frFlights ? null : mobile ? setSel(id) : open(id))}
             insetLeft={mobile ? 0 : panelW + 32}
             insetBottom={mobile ? 170 : 0}
             today={today}
-            fitKey={frOnMap ? `fr:${frOnMap.uid}` : flights.length}
+            fitKey={frOnMap ? `fr:${frOnMap.uid}` : flights.length + stays.length * 1000}
           />
           {frOnMap && (
             <div className="map-who" style={{ left: mobile ? 16 : panelW + 48 }}>
@@ -708,7 +778,7 @@ export default function App() {
       </aside>
       {mobile && tabbar}
       {onMap && selFlight && <MapStrip ctx={ctx} selId={selFlight.id} onSel={setSel} onOpen={open} />}
-      {onMap && !flights.length && (
+      {onMap && !flights.length && !stays.length && (
         <div className="map-card" style={{ padding: 16 }}>
           <p style={{ margin: 0 }} className="muted">항공편을 추가하면 노선이 지구본에 그려져요.</p>
         </div>

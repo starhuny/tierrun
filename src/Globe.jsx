@@ -25,7 +25,7 @@ function readColors(el) {
   const out = {
     o1: g('--map-ocean-1'), o2: g('--map-ocean-2'), land: g('--map-land'), edge: g('--map-land-edge'), grat: g('--map-grat'),
     glow: g('--map-glow'), arc: g('--map-arc'), past: g('--map-arc-past'), sel: g('--map-arc-sel'), label: g('--map-label'),
-    halo: g('--map-halo'), pill: g('--map-pill'), pillInk: g('--map-pill-ink'),
+    halo: g('--map-halo'), pill: g('--map-pill'), pillInk: g('--map-pill-ink'), hotel: g('--map-hotel'),
     font: cs.getPropertyValue('--font').trim() || 'sans-serif',
   };
   probe.remove();
@@ -46,24 +46,25 @@ function fitTarget(segs, w, h, insetL, insetB, baseR) {
   let maxA = 0;
   for (const p of pts) maxA = Math.max(maxA, geoDistance(c, p));
   const avail = (Math.min(w - insetL, h - insetB) / 2) * 0.72;
-  const ang = Math.max(maxA, 0.02);
+  // 한 곳(숙박 핀 하나 등)만 있으면 너무 확대하지 않음
+  const ang = Math.max(maxA, maxA < 0.05 ? 0.3 : 0.02);
   let R = ang >= 1.35 ? baseR : avail / Math.sin(ang);
   R = Math.max(baseR, Math.min(R, baseR * 60));
   return { lon: c[0], lat: Math.max(-70, Math.min(70, c[1])), k: R / baseR };
 }
 
-export default function Globe({ flights, selectedId, onSelect, insetLeft = 0, insetBottom = 0, today, interactive = true, fitKey }) {
+export default function Globe({ flights, pins = [], selectedId, onSelect, insetLeft = 0, insetBottom = 0, today, interactive = true, fitKey }) {
   const wrap = useRef(null);
   const cvs = useRef(null);
   const st = useRef({ lon: 127.8, lat: 30, k: 1, w: 0, h: 0, dpr: 1, colors: null, anim: null, dragging: false, raf: 0 });
   const props = useRef({});
-  props.current = { flights, selectedId, onSelect, insetLeft, insetBottom, today };
+  props.current = { flights, pins, selectedId, onSelect, insetLeft, insetBottom, today };
 
   const draw = () => {
     const s = st.current;
     const c = cvs.current;
     if (!c || !s.w) return;
-    const { flights: fl, selectedId: sel, insetLeft: L, insetBottom: B, today: td } = props.current;
+    const { flights: fl, pins: pn, selectedId: sel, insetLeft: L, insetBottom: B, today: td } = props.current;
     const ctx = c.getContext('2d');
     const col = s.colors || (s.colors = readColors(wrap.current));
     const baseR = Math.min(s.w - L, s.h - B) * 0.42;
@@ -152,6 +153,27 @@ export default function Globe({ flights, selectedId, onSelect, insetLeft = 0, in
       ctx.strokeStyle = sel ? col.sel : col.arc;
       ctx.stroke();
     }
+    // 숙박 핀 (호텔): 둥근 사각형
+    const pinAps = [];
+    for (const pin of pn || []) {
+      const ap = findAirport(pin.code);
+      if (!ap) continue;
+      const p = [ap.lon, ap.lat];
+      if (!visible(p)) continue;
+      const [x, y] = proj(p);
+      const isSel = pin.id === sel;
+      ctx.globalAlpha = sel && !isSel ? 0.35 : 1;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x - 6, y - 6, 12, 12, 3.5) : ctx.rect(x - 6, y - 6, 12, 12);
+      ctx.fillStyle = col.hotel;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = col.halo;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      if (!apCount.has(ap.code)) pinAps.push({ ap, n: 0, sel: isSel });
+    }
+    aps.push(...pinAps);
     // 라벨
     ctx.textBaseline = 'middle';
     for (const { ap, sel: isSelAp } of aps) {
@@ -220,9 +242,10 @@ export default function Globe({ flights, selectedId, onSelect, insetLeft = 0, in
     const s = st.current;
     const { flights: fl, selectedId: sel, insetLeft: L, insetBottom: B } = props.current;
     if (!s.w) return;
-    const segs = sel ? fl.filter((f) => f.id === sel) : fl;
+    const all = [...fl, ...(props.current.pins || []).map((p) => ({ id: p.id, from: p.code, to: p.code }))];
+    const segs = sel ? all.filter((f) => f.id === sel) : all;
     const baseR = Math.min(s.w - L, s.h - B) * 0.42;
-    const t = fitTarget(segs.length ? segs : fl, s.w, s.h, L, B, baseR);
+    const t = fitTarget(segs.length ? segs : all, s.w, s.h, L, B, baseR);
     if (animate) animateTo(t);
     else {
       Object.assign(s, t);
@@ -274,7 +297,7 @@ export default function Globe({ flights, selectedId, onSelect, insetLeft = 0, in
   useEffect(() => {
     request();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flights, today]);
+  }, [flights, pins, today]);
 
   // 조작
   useEffect(() => {

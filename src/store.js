@@ -4,9 +4,9 @@ import { FIREBASE_CONFIG } from './firebaseConfig.js';
 //  - artifact : Claude 아티팩트로 열렸을 때 (계정별 비공개 저장 + Claude AI)
 //  - firebase : 배포 버전 (구글 로그인 + Firestore)
 //  - local    : 위 둘이 없을 때 이 브라우저에만 저장
-export const EMPTY_STATE = { profile: null, flights: [], trips: {} };
+export const EMPTY_STATE = { profile: null, flights: [], trips: {}, stays: [] };
 const LS_KEY = 'tierrun:v1';
-const clean = (s) => JSON.parse(JSON.stringify({ profile: s.profile ?? null, flights: s.flights ?? [], trips: s.trips ?? {} }));
+const clean = (s) => JSON.parse(JSON.stringify({ profile: s.profile ?? null, flights: s.flights ?? [], trips: s.trips ?? {}, stays: s.stays ?? [] }));
 
 function localAdapter(note) {
   return {

@@ -7,33 +7,13 @@ import {
   asSummary, asYear, compareMethods, tierBySP, spFor, isOneworld, asCategory,
 } from './alaska.js';
 import { PROGRAMS, PROGRAM_LIST, walletOf } from './wallet.js';
-import { Icon, AirlineMark, Bar, Seg, NumInput, Ring } from './ui.jsx';
+import { Icon, AirlineMark, Bar, Seg, NumInput, Ring, CardFace } from './ui.jsx';
+import { acFace } from './Accor.jsx';
+export { CardFace };
 
 const city = (c) => findAirport(c)?.city || c || '?';
 const thisYear = (today) => +today.slice(0, 4);
 const man = (n) => (n % 10000 === 0 ? `${n / 10000}만` : `${(n / 10000).toFixed(1).replace(/\.0$/, '')}만`);
-
-/* ───────── 카드 모양 ───────── */
-export function CardFace({ bg, ink, en, title, sub, gem, airline, foot, conf, plan, compact }) {
-  return (
-    <div className={`wface ${compact ? 'compact' : ''}`} style={{ background: bg, color: ink }}>
-      <div className="wtop">
-        <div>
-          <div className="en">{en}</div>
-          <div className="ko">{title}{gem && <i className="gem" style={{ background: gem }} />}</div>
-          {sub && <div className="sub">{sub}</div>}
-        </div>
-        {airline && <AirlineMark code={airline} size="sm" />}
-      </div>
-      {!compact && (
-        <div className="wfoot num">
-          {foot}
-          {conf != null && <Bar conf={conf} plan={plan || 0} thin />}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function keFace(profile, goals) {
   const tier = TIER[profile?.tier || 'SKYPASS'];
@@ -61,6 +41,7 @@ function asFace(prog, flights, today) {
 export function faceFor(entry, ctx, goals) {
   if (entry.program === 'KE') return keFace(ctx.profile, goals);
   if (entry.program === 'AS') return asFace(entry, ctx.flights, ctx.today);
+  if (entry.program === 'ALL') return acFace(entry, ctx.stays || [], ctx.today);
   return null;
 }
 
@@ -68,6 +49,7 @@ export function faceFor(entry, ctx, goals) {
 const PICK_DESC = {
   KE: '모닝캄 · 셀렉트 · 프리미엄 · 밀리언 마일러',
   AS: '실버(루비) · 골드(사파이어) · 플래티넘(에메랄드) · 티타늄',
+  ALL: '실버 · 골드 · 플래티넘 · 다이아몬드 (호텔)',
   TK: '클래식 플러스 · 엘리트 · 엘리트 플러스',
 };
 export function SetupStart({ user, onNext, onSample }) {
@@ -94,7 +76,7 @@ export function SetupStart({ user, onNext, onSample }) {
                   <AirlineMark code={p.airline} />
                   <span>
                     <b>{p.name}</b>
-                    <small>{p.alliance === 'OW' ? '원월드' : p.alliance === 'SA' ? '스타얼라이언스' : '스카이팀'} · {p.soon ? '준비 중' : PICK_DESC[p.id]}</small>
+                    <small>{p.alliance === 'OW' ? '원월드' : p.alliance === 'SA' ? '스타얼라이언스' : p.alliance === 'HOTEL' ? '호텔' : '스카이팀'} · {p.soon ? '준비 중' : PICK_DESC[p.id]}</small>
                   </span>
                   <span className="ck">{on && <Icon name="check" size={14} stroke={3} />}</span>
                 </button>
@@ -150,7 +132,7 @@ export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onEdit
         {missing.map((p) => (
           <button key={p.id} className={`wadd ${p.soon ? 'soon' : ''}`} onClick={() => !p.soon && onAdd(p.id)} disabled={p.soon}>
             <AirlineMark code={p.airline} size="sm" />
-            <span><b>{p.name}</b><small>{p.alliance === 'OW' ? '원월드' : p.alliance === 'SA' ? '스타얼라이언스' : '스카이팀'}{p.soon ? ' · 준비 중' : ''}</small></span>
+            <span><b>{p.name}</b><small>{p.alliance === 'OW' ? '원월드' : p.alliance === 'SA' ? '스타얼라이언스' : p.alliance === 'HOTEL' ? '호텔' : '스카이팀'}{p.soon ? ' · 준비 중' : ''}</small></span>
             {!p.soon && <Icon name="plus" size={18} />}
           </button>
         ))}
@@ -162,7 +144,7 @@ export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onEdit
         {wallet.map((w) => (
           <button key={w.program} className="wmenu" onClick={() => (w.program === 'KE' ? onSettings() : onEditProgram(w.program))}>
             <AirlineMark code={PROGRAMS[w.program].airline} size="xs" />
-            <span>{PROGRAMS[w.program].short} 설정<small>{w.program === 'KE' ? '등급 · 실적 입력 · 데이터 · 로그아웃' : '등급 · 올해 상태포인트 · 적립 방식'}</small></span>
+            <span>{PROGRAMS[w.program].short} 설정<small>{w.program === 'KE' ? '등급 · 실적 입력 · 데이터 · 로그아웃' : w.program === 'ALL' ? '등급 · 올해 숙박일·포인트 · 보너스 박 · 환율' : '등급 · 올해 상태포인트 · 적립 방식'}</small></span>
             <Icon name="chev" size={16} />
           </button>
         ))}

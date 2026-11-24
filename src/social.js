@@ -4,6 +4,7 @@ import { TIER } from './skypass.js';
 import { aircraftTop } from './aircraft.js';
 import { walletOf, hasProgram } from './wallet.js';
 import { asSummary } from './alaska.js';
+import { acSummary } from './accor.js';
 
 export const INVITE_PARAM = 'f';
 export const INVITE_KEY = 'tierrun:invite';
@@ -33,7 +34,7 @@ export function flightStats(flights, today) {
 }
 
 // 친구에게 보이는 것: 이름·사진, 현재 등급, 다음 등급 진행률, 다가오는 항공편(운임·메모·지난 항공편 제외)
-export function buildPublic({ profile, user, flights, goals, today }) {
+export function buildPublic({ profile, user, flights, goals, today, stays = [] }) {
   const h = goals?.headline;
   const best = h ? h.options[h.best] : null;
   const mileOpt = h ? h.options.find((o) => o.parts.every((p) => p.unit === 'mi')) || best : null;
@@ -60,6 +61,10 @@ export function buildPublic({ profile, user, flights, goals, today }) {
     // 본인이 정한 지갑 순서 (친구 화면도 이 순서로 보여줌)
     order: walletOf(profile).map((w) => w.program),
     wallet: walletOf(profile).filter((w) => w.program !== 'KE').map((w) => {
+      if (w.program === 'ALL') {
+        const a = acSummary(w, stays, today, undefined, w.eur);
+        return { program: 'ALL', tier: a.held.id, year: a.year, nights: a.conf.nights, points: a.conf.points, allNights: a.all.nights, allPoints: a.all.points, next: a.next?.id || null, nextNights: a.next?.nights ?? null, nextPoints: a.next?.points || null, goal: a.goal || '', validUntil: w.validUntil || '' };
+      }
       if (w.program !== 'AS') return { program: w.program };
       const x = asSummary(w, flights, today);
       return { program: 'AS', tier: x.held.id, year: x.year, sp: x.conf, all: x.all, next: x.next?.id || null, nextSp: x.next?.sp || null, goal: x.goal || '' };
