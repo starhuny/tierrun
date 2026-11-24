@@ -88,7 +88,7 @@ export function FriendRow({ fr, ctx, onClick, right }) {
             {orderOf(fr).map((p) => (p === 'KE' ? <KeChip key="KE" fr={fr} /> : p === 'ALL' ? <AcChip key="ALL" w={acOf(fr)} /> : <AsChip key="AS" w={asOf(fr)} />))}
           </span>
           {fr.missing ? (
-            <span className="fr-sub">아직 티어런 정보가 올라오지 않았어요</span>
+            <span className="fr-sub">아직 티어 트래커 정보가 올라오지 않았어요</span>
           ) : orderOf(fr)[0] === 'ALL' ? (() => {
             const x = acInfo(acOf(fr));
             return x.ach ? (
@@ -186,7 +186,7 @@ export function FriendsView({ ctx, social, err, invite, onOpen, onRemove, onRese
   };
   const share = async () => {
     try {
-      await navigator.share({ title: '티어런 친구 초대', text: `${name ? `${name}님이 ` : ''}티어런에서 친구 초대를 보냈어요. 열면 바로 친구가 돼요.`, url: link });
+      await navigator.share({ title: '티어 트래커 친구 초대', text: `${name ? `${name}님이 ` : ''}티어 트래커에서 친구 초대를 보냈어요. 열면 바로 친구가 돼요.`, url: link });
     } catch { /* 취소 */ }
   };
   useEffect(() => { onRefresh?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -276,7 +276,7 @@ export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
         <button className="icon-btn" onClick={onBack} aria-label="뒤로"><Icon name="close" size={18} /></button>
       </div>
       {fr.missing ? (
-        <p className="muted" style={{ margin: '12px 20px' }}>친구가 아직 새 버전의 티어런을 열지 않아 정보가 없어요. 친구가 앱을 한 번 열면 보여요.</p>
+        <p className="muted" style={{ margin: '12px 20px' }}>친구가 아직 새 버전의 티어 트래커를 열지 않아 정보가 없어요. 친구가 앱을 한 번 열면 보여요.</p>
       ) : (
         <>
           {mobile && up.length > 0 && (
@@ -459,7 +459,7 @@ export function FlightCompare({ fr, ctx }) {
       <div className="pad" style={{ marginTop: 12 }}>
         <div className="card">
           <div className="card-h"><span>비행 기록 비교</span></div>
-          <p className="muted" style={{ margin: 0, fontSize: 14 }}>{fr.name || '친구'}님이 아직 예전 버전이라 비교할 기록이 없어요. 친구가 티어런을 새로고침해서 한 번 열면 많이 탄 항공사·공항·기종 비교가 여기에 나와요.</p>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>{fr.name || '친구'}님이 아직 예전 버전이라 비교할 기록이 없어요. 친구가 티어 트래커를 새로고침해서 한 번 열면 많이 탄 항공사·공항·기종 비교가 여기에 나와요.</p>
         </div>
       </div>
     );

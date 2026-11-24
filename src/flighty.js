@@ -1,5 +1,5 @@
 // Flighty 앱에서 내보낸 CSV(FlightyExport-YYYY-MM-DD.csv) 읽기
-// 대한항공·스카이팀·아시아나 항공편만 골라 티어런 항공편으로 바꿈 (적립률은 모두 100%)
+// 대한항공·스카이팀·아시아나 항공편만 골라 티어 트래커 항공편으로 바꿈 (적립률은 모두 100%)
 // 지갑에 알래스카가 있으면 원월드 항공편도 골라 알래스카 적립으로 넣음
 import { baseMilesFor, defaultCredit, uid } from './core.js';
 import { normAircraft, isKnownAircraft } from './aircraft.js';

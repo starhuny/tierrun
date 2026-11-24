@@ -484,8 +484,8 @@ export default function App() {
             <circle cx="10" cy="40" r="4" fill="var(--panel)" stroke="var(--ink)" strokeWidth="3" />
             <circle cx="54" cy="40" r="4" fill="var(--panel)" stroke="var(--ink)" strokeWidth="3" />
           </svg>
-          <h1>티어런</h1>
-          <p>대한항공 스카이패스부터 알래스카 Atmos까지,<br />항공 등급을 지갑처럼 한곳에. 탈 때마다 쌓이는 진행률을 한눈에.</p>
+          <h1>티어 트래커</h1>
+          <p>대한항공 스카이패스, 알래스카 Atmos부터 아코르 ALL까지<br />항공·호텔 등급을 지갑처럼 한곳에. 비행·숙박마다 쌓이는 진행률을 한눈에.</p>
           {sessionStorage.getItem(INVITE_KEY) && <div className="notice info" style={{ textAlign: 'left' }}>친구 초대 링크로 들어왔어요. <b>Google로 로그인</b>하면 바로 친구가 돼요.</div>}
           <button
             className="gbtn"
