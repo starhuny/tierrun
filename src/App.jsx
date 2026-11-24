@@ -6,6 +6,20 @@ import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
 import ImportFlighty from './ImportFlighty.jsx';
+import { FriendsView, FriendView } from './Friends.jsx';
+import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
+
+// 초대 링크(?f=토큰)로 들어오면 로그인 전까지 기억해 두고 주소에서는 지움
+(() => {
+  try {
+    const sp = new URLSearchParams(location.search);
+    const t = sp.get(INVITE_PARAM);
+    if (!t) return;
+    sessionStorage.setItem(INVITE_KEY, t);
+    sp.delete(INVITE_PARAM);
+    history.replaceState(null, '', location.pathname + (sp.toString() ? `?${sp}` : '') + location.hash);
+  } catch { /* 무시 */ }
+})();
 import Settings, { emptyProfile } from './Settings.jsx';
 import { FlightsView, DetailView, TierView, CostView, Head, MapStrip } from './views.jsx';
 import { Icon, Avatar } from './ui.jsx';
@@ -102,7 +116,84 @@ export default function App() {
   const trips = state.trips;
   const goals = useMemo(() => computeGoals(profile || emptyProfile(), flights, today), [profile, flights, today]);
   const stats = useMemo(() => costStats(flights, trips), [flights, trips]);
-  const ctx = { flights, trips, profile, today, user: ad?.user };
+  // ── 친구 ──
+  const social = phase === 'ready' && ad?.mode === 'firebase' && ad?.user ? ad.social : null;
+  const [friends, setFriends] = useState([]);
+  const [friendsErr, setFriendsErr] = useState('');
+  const lastLoad = useRef(0);
+  const lastPub = useRef('');
+  const invited = useRef(new Set());
+  const ruleMsg = (e) => (String(e?.code || e?.message || '').includes('permission') ? '친구 기능 준비 중이에요. (Firebase 보안 규칙 업데이트 필요)' : e?.message || '친구 목록을 불러오지 못했어요.');
+  const loadFriends = useCallback(async (force) => {
+    if (!social || (!force && Date.now() - lastLoad.current < 30000)) return;
+    lastLoad.current = Date.now();
+    try {
+      setFriends(await social.list());
+      setFriendsErr('');
+    } catch (e) {
+      setFriendsErr(ruleMsg(e));
+    }
+  }, [social]);
+  // 처음 한 번: 초대 링크 처리 + 친구 목록
+  useEffect(() => {
+    if (phase !== 'ready' || !ad) return;
+    const token = sessionStorage.getItem(INVITE_KEY);
+    if (token) {
+      sessionStorage.removeItem(INVITE_KEY);
+      if (!social) say('친구 추가는 Google 로그인 후에 할 수 있어요');
+      else social.join(token).then((r) => { say(r.self ? '내 초대 링크예요. 친구에게 보내 주세요' : `${r.name || '친구'}님과 친구가 됐어요`); loadFriends(true); }).catch((e) => say(ruleMsg(e)));
+    }
+    loadFriends(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, ad]);
+  useEffect(() => {
+    const f = () => document.visibilityState === 'visible' && loadFriends();
+    document.addEventListener('visibilitychange', f);
+    return () => document.removeEventListener('visibilitychange', f);
+  }, [loadFriends]);
+  // 내 초대 토큰 (설정에 보관, 서버에 등록)
+  useEffect(() => {
+    if (!social || !profile || profile.sample) return;
+    if (!profile.invite) {
+      setState((s) => (s.profile && !s.profile.invite ? { ...s, profile: { ...s.profile, invite: newToken() } } : s));
+      return;
+    }
+    if (invited.current.has(profile.invite)) return;
+    invited.current.add(profile.invite);
+    social.ensureInvite(profile.invite).catch((e) => { invited.current.delete(profile.invite); setFriendsErr(ruleMsg(e)); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [social, profile?.invite, profile?.sample, !!profile]);
+  // 친구에게 보여줄 요약 올리기 (바뀌었을 때만)
+  useEffect(() => {
+    if (!social || !profile || profile.sample) return;
+    const sum = buildPublic({ profile, user: ad.user, flights, goals, today });
+    const json = JSON.stringify(sum);
+    if (json === lastPub.current) return;
+    const t = setTimeout(() => {
+      social.publish(sum).then(() => { lastPub.current = json; }).catch(() => {});
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [social, profile, flights, goals, today, ad]);
+  const together = useMemo(() => togetherMap(flights, friends, today), [flights, friends, today]);
+  const removeFriend = async (uid) => {
+    const fr = friends.find((x) => x.uid === uid);
+    try {
+      await social.remove(uid);
+      setFriends((l) => l.filter((x) => x.uid !== uid));
+      setStack((v) => (v?.name === 'friend' ? { name: 'friends' } : v));
+      say(`${fr?.name || '친구'}님을 친구에서 삭제했어요`);
+    } catch (e) {
+      say(ruleMsg(e));
+    }
+  };
+  const resetInvite = () => {
+    const old = profile?.invite;
+    if (old) social?.dropInvite(old);
+    setState((s) => ({ ...s, profile: { ...s.profile, invite: newToken() } }));
+    say('새 초대 링크를 만들었어요. 예전 링크는 더 이상 열리지 않아요');
+  };
+
+  const ctx = { flights, trips, profile, today, user: ad?.user, together, friends };
 
   const open = (id) => {
     setSel(id);
@@ -206,6 +297,7 @@ export default function App() {
           </svg>
           <h1>티어런</h1>
           <p>모닝캄부터 밀리언 마일러까지,<br />탈 때마다 쌓이는 대한항공 등급 진행률을 한눈에.</p>
+          {sessionStorage.getItem(INVITE_KEY) && <div className="notice info" style={{ textAlign: 'left' }}>친구 초대 링크로 들어왔어요. <b>Google로 로그인</b>하면 바로 친구가 돼요.</div>}
           <button
             className="gbtn"
             onClick={async () => {
@@ -262,7 +354,7 @@ export default function App() {
         isSetup={!!view.setup}
         hasFlights={flights.length > 0}
         onSave={(p) => {
-          setState((s) => ({ ...s, profile: p }));
+          setState((s) => ({ ...s, profile: { ...p, invite: p.invite || s.profile?.invite } }));
           setStack(null);
           say(view.setup ? '설정 완료! 항공편을 추가해 보세요' : '저장했어요');
         }}
@@ -293,6 +385,11 @@ export default function App() {
         }}
       />
     );
+  } else if (view?.name === 'friends') {
+    content = <FriendsView ctx={ctx} social={!!social} err={friendsErr} invite={profile?.invite} onOpen={(uid) => setStack({ name: 'friend', uid })} onRemove={removeFriend} onReset={resetInvite} onRefresh={() => loadFriends(true)} onClose={() => setStack(null)} say={say} />;
+  } else if (view?.name === 'friend') {
+    const fr = friends.find((x) => x.uid === view.uid);
+    content = fr ? <FriendView fr={fr} ctx={ctx} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
   } else if (view?.name === 'import') {
     content = <ImportFlighty ctx={ctx} onImport={importFlights} onClose={() => setStack(null)} onSettings={() => setStack({ name: 'settings' })} />;
   } else if (view?.name === 'form') {
@@ -317,7 +414,7 @@ export default function App() {
       <div className="empty"><p>항공편을 찾을 수 없어요.</p><button className="btn" onClick={close}>돌아가기</button></div>
     );
   } else if (tab === 'tier') {
-    content = <TierView ctx={ctx} goals={goals} stats={stats} head={<Head title="등급 현황" right={avatar} />} onSettings={() => setStack({ name: 'settings' })} />;
+    content = <TierView ctx={ctx} goals={goals} stats={stats} head={<Head title="등급 현황" right={avatar} />} onSettings={() => setStack({ name: 'settings' })} friendsBox={{ on: !!social, err: friendsErr, onFriends: () => { loadFriends(true); setStack({ name: 'friends' }); }, onOpen: (uid) => setStack({ name: 'friend', uid }), onMount: () => loadFriends() }} />;
   } else if (tab === 'cost') {
     content = <CostView ctx={ctx} goals={goals} stats={stats} head={<Head title="마일당 단가" right={avatar} />} onOpen={open} />;
   } else {

@@ -7,6 +7,8 @@ import {
 } from './core.js';
 import { Icon, AirlineMark, Bar, Ring, Avatar } from './ui.jsx';
 import Globe from './Globe.jsx';
+import { FriendsSection, FriendFace } from './Friends.jsx';
+import { friendNames } from './social.js';
 
 export const city = (c) => findAirport(c)?.city || c || '?';
 export const routeTitle = (f) => `${city(f.from)} → ${city(f.to)}`;
@@ -51,6 +53,7 @@ export function FlightRow({ f, ctx, selected, onClick }) {
           <CabinBadge f={f} />
           {(f.credit === 'ST' || f.credit === 'OT') && <span className={`badge cr-${f.credit}`}>{CREDIT[f.credit].short}</span>}
           {excluded && f.credit !== 'NONE' && <span className="badge gray">입력한 실적에 포함</span>}
+          {ctx.together?.get(f.id) && <span className="badge together"><Icon name="user" size={12} />{friendNames(ctx.together.get(f.id))} 같이 가요</span>}
         </div>
       </div>
     </button>
@@ -329,6 +332,20 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
         <div className="sub">도착</div>
       </div>
 
+      {ctx.together?.get(f.id) && (
+        <div className="pad" style={{ marginTop: 14 }}>
+          <div className="card together-card">
+            <div className="card-h"><span>같은 비행기 타는 친구</span></div>
+            {ctx.together.get(f.id).map((fr) => (
+              <div key={fr.uid} className="tg-row">
+                <FriendFace fr={fr} size={32} />
+                <b>{fr.name || '친구'}</b>
+                <span className="muted" style={{ fontSize: 13 }}>{f.airline} {f.flightNo} 같이 가요</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="pad" style={{ marginTop: 14 }}>
         <div className="card">
           <div className="card-h"><span>스카이패스 적립</span><span className={`badge ${f.credit === 'ST' || f.credit === 'OT' ? `cr-${f.credit}` : 'gray'}`}>{CREDIT[f.credit]?.label}</span></div>
@@ -467,7 +484,7 @@ function GoalCard({ g }) {
   );
 }
 
-export function TierView({ ctx, goals, stats, head, onSettings }) {
+export function TierView({ ctx, goals, stats, head, onSettings, friendsBox }) {
   const { profile, today, user } = ctx;
   const tier = TIER[profile?.tier || 'SKYPASS'];
   const h = goals.headline;
@@ -553,6 +570,8 @@ export function TierView({ ctx, goals, stats, head, onSettings }) {
 
       {others.length > 0 && <div className="section-h"><span>다른 목표</span></div>}
       {others.map((g) => <GoalCard key={g.id} g={g} />)}
+
+      {friendsBox && <FriendsSection ctx={ctx} box={friendsBox} />}
 
       <div className="section-h"><span>등급 사다리</span></div>
       <div className="ladder">

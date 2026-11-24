@@ -114,6 +114,58 @@ async function firebaseAdapter(cfg) {
       await fs.setDoc(fs.doc(store, 'users', adapter.user.id), { json: JSON.stringify(clean(state)), updatedAt: fs.serverTimestamp() });
     },
   };
+
+  // 친구 기능
+  //  invites/{token}  : 초대 링크 → 누구의 링크인지 {uid}
+  //  friends/{a_b}    : 친구 관계 {members:[a,b], token} (a<b, 둘 중 누구나 삭제 가능)
+  //  public/{uid}     : 친구에게 보여줄 요약 (등급·진행률·다가오는 항공편만). 친구만 읽기 가능
+  const pairOf = (x, y) => (x < y ? [x, y] : [y, x]);
+  const readPublic = async (uid) => {
+    try {
+      const snap = await fs.getDoc(fs.doc(store, 'public', uid));
+      if (!snap.exists()) return { uid, missing: true };
+      const d = snap.data();
+      return { uid, ...d, updatedAt: d.updatedAt?.toDate?.()?.toISOString?.() || null };
+    } catch {
+      return { uid, missing: true };
+    }
+  };
+  adapter.social = {
+    async ensureInvite(token) {
+      if (!adapter.user || !token) return;
+      await fs.setDoc(fs.doc(store, 'invites', token), { uid: adapter.user.id, createdAt: fs.serverTimestamp() });
+    },
+    async dropInvite(token) {
+      if (!adapter.user || !token) return;
+      try { await fs.deleteDoc(fs.doc(store, 'invites', token)); } catch { /* 이미 없음 */ }
+    },
+    async publish(summary) {
+      if (!adapter.user) return;
+      await fs.setDoc(fs.doc(store, 'public', adapter.user.id), { ...summary, updatedAt: fs.serverTimestamp() });
+    },
+    async list() {
+      if (!adapter.user) return [];
+      const me = adapter.user.id;
+      const q = fs.query(fs.collection(store, 'friends'), fs.where('members', 'array-contains', me));
+      const snap = await fs.getDocs(q);
+      const ids = [...new Set(snap.docs.map((d) => (d.data().members || []).find((m) => m !== me)).filter(Boolean))];
+      return Promise.all(ids.map(readPublic));
+    },
+    async join(token) {
+      if (!adapter.user) throw new Error('로그인이 필요해요.');
+      const inv = await fs.getDoc(fs.doc(store, 'invites', token));
+      if (!inv.exists()) throw new Error('초대 링크가 만료됐거나 잘못됐어요. 새 링크를 받아 주세요.');
+      const other = inv.data().uid;
+      if (other === adapter.user.id) return { self: true };
+      const members = pairOf(adapter.user.id, other);
+      await fs.setDoc(fs.doc(store, 'friends', members.join('_')), { members, token, createdAt: fs.serverTimestamp() });
+      return readPublic(other);
+    },
+    async remove(uid) {
+      if (!adapter.user) return;
+      await fs.deleteDoc(fs.doc(store, 'friends', pairOf(adapter.user.id, uid).join('_')));
+    },
+  };
   return adapter;
 }
 
