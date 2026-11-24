@@ -4,6 +4,8 @@
 // 도시 좌표(소수 2자리로 반올림)별로 Vercel CDN에 7일 캐시
 import { detectBrand } from '../src/brands.js';
 
+export const config = { maxDuration: 30 };
+
 const MIRRORS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
@@ -62,10 +64,12 @@ export default async function handler(req, res) {
   }
   const body = 'data=' + encodeURIComponent(buildQuery(lat, lon, r));
   const errs = [];
+  const t0 = Date.now();
   for (const url of MIRRORS) {
+    if (Date.now() - t0 > 22000) break;
     try {
       const ctl = new AbortController();
-      const tm = setTimeout(() => ctl.abort(), 20000);
+      const tm = setTimeout(() => ctl.abort(), 12000);
       const resp = await fetch(url, { method: 'POST', body, signal: ctl.signal, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'tierrun.vercel.app (hotel list)' } });
       clearTimeout(tm);
       if (!resp.ok) throw new Error(`${new URL(url).host} ${resp.status}`);
@@ -74,9 +78,10 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 's-maxage=604800, stale-while-revalidate=1209600');
       return res.status(200).json({ hotels, source: 'OpenStreetMap' });
     } catch (e) {
-      errs.push(String(e.message || e));
+      errs.push(`${new URL(url).host}: ${String(e.name === 'AbortError' ? 'timeout' : e.message || e)} (${Date.now() - t0}ms)`);
     }
   }
+  // 실패도 200으로 돌려줘서(본문 error) 브라우저·점검 도구에서 이유를 볼 수 있게
   res.setHeader('Cache-Control', 'no-store');
-  return res.status(502).json({ error: '호텔 목록을 가져오지 못했어요.', detail: errs });
+  return res.status(200).json({ hotels: [], error: '호텔 목록을 가져오지 못했어요.', detail: errs });
 }

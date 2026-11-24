@@ -26,6 +26,7 @@ export async function fetchHotels(lat, lon) {
   const r = await fetch(`/api/hotels?lat=${(+lat).toFixed(2)}&lon=${(+lon).toFixed(2)}`);
   if (!r.ok) throw new Error(`hotels ${r.status}`);
   const j = await r.json();
+  if (j.error) throw new Error(j.error);
   const hotels = Array.isArray(j.hotels) ? j.hotels : [];
   mem.set(k, hotels);
   if (hotels.length) writeStore(k, hotels);
