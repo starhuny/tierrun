@@ -11,10 +11,12 @@ export const PROGRAMS = {
 };
 export const PROGRAM_LIST = Object.values(PROGRAMS);
 
+// 예전 사용자(지갑 없음)는 스카이패스 하나. 처음 설정에서 알래스카만 고르면 스카이패스 없이 시작
 export function walletOf(profile) {
-  const w = profile?.wallet;
-  const list = Array.isArray(w) ? w.filter((x) => PROGRAMS[x?.program]) : [];
-  return list.some((x) => x.program === 'KE') ? list : [{ program: 'KE' }, ...list];
+  if (!profile) return [];
+  const w = profile.wallet;
+  if (!Array.isArray(w)) return [{ program: 'KE' }];
+  return w.filter((x) => PROGRAMS[x?.program] && !PROGRAMS[x.program].soon);
 }
 export const progEntry = (profile, id) => walletOf(profile).find((p) => p.program === id) || null;
 export const hasProgram = (profile, id) => !!progEntry(profile, id);

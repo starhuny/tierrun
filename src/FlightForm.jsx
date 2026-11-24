@@ -180,7 +180,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], profi
     <div className="fade-in">
       <div className="dhead">
         <span className="mark" style={{ background: 'var(--navy-btn)', color: 'var(--navy-btn-ink)' }}><Icon name="plane" size={16} /></span>
-        <div><div className="k">스카이패스 기준 자동 계산</div><h2>{grouping ? '여정으로 묶기' : editing ? '여정 편집' : '항공편 추가'}</h2></div>
+        <div><div className="k">적립 자동 계산</div><h2>{grouping ? '여정으로 묶기' : editing ? '여정 편집' : '항공편 추가'}</h2></div>
         <button className="icon-btn" onClick={onCancel} aria-label="닫기"><Icon name="close" size={18} /></button>
       </div>
       <div className="form">

@@ -2,7 +2,7 @@
 import { sortFlights, cabinOf } from './core.js';
 import { TIER } from './skypass.js';
 import { aircraftTop } from './aircraft.js';
-import { walletOf } from './wallet.js';
+import { walletOf, hasProgram } from './wallet.js';
 import { asSummary } from './alaska.js';
 
 export const INVITE_PARAM = 'f';
@@ -43,6 +43,7 @@ export function buildPublic({ profile, user, flights, goals, today }) {
     name: profile?.name || user?.name || '',
     photo: user?.photo || '',
     tier,
+    ke: hasProgram(profile, 'KE'),
     periodEnd: tier === 'MC' || tier === 'MCS' ? profile?.periodEnd || '' : '',
     goal: h
       ? {

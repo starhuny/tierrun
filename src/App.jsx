@@ -10,8 +10,8 @@ import { FriendsView, FriendView } from './Friends.jsx';
 import { AircraftView } from './Aircraft.jsx';
 import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
-import { WalletView, TierAddView, AlaskaView } from './Wallet.jsx';
-import { walletOf, progEntry } from './wallet.js';
+import { WalletView, TierAddView, AlaskaView, SetupStart } from './Wallet.jsx';
+import { walletOf, progEntry, hasProgram } from './wallet.js';
 import { flightSP } from './alaska.js';
 
 // 초대 링크(?f=토큰)로 들어오면 로그인 전까지 기억해 두고 주소에서는 지움
@@ -221,6 +221,7 @@ export default function App() {
   const asProg = progEntry(profile, 'AS');
   const ctx = { flights, trips, profile, today, user: ad?.user, together, friends, asProg };
   const [alliance, setAlliance] = useState('ALL');
+  const [setupPick, setSetupPick] = useState(null); // 처음 설정: { name, programs }
   // ── 티어 지갑 ──
   const setWallet = (fn) => setState((s) => ({ ...s, profile: { ...s.profile, wallet: fn(walletOf(s.profile)) } }));
   const openProgram = (id) => {
@@ -231,10 +232,13 @@ export default function App() {
     const conv = new Set(convert);
     const isNew = !progEntry(profile, entry.program);
     setState((s) => {
-      const w = walletOf(s.profile);
+      // 처음 설정에서 알래스카만 고른 경우: 스카이패스 없이 프로필을 만듦
+      const base = s.profile || { ...emptyProfile(setupPick?.name || ad?.user?.name || ''), tier: 'SKYPASS', wallet: [] };
+      const w = walletOf(base);
       const next = w.some((x) => x.program === entry.program) ? w.map((x) => (x.program === entry.program ? entry : x)) : [...w, entry];
-      return { ...s, profile: { ...s.profile, wallet: next }, flights: s.flights.map((f) => (conv.has(f.id) ? { ...f, program: entry.program, credit: 'NONE' } : f)) };
+      return { ...s, profile: { ...base, wallet: next }, flights: s.flights.map((f) => (conv.has(f.id) ? { ...f, program: entry.program, credit: 'NONE' } : f)) };
     });
+    setSetupPick(null);
     setStack({ name: 'program', id: entry.program });
     say(isNew ? `지갑에 알래스카 티어를 추가했어요${conv.size ? ` · 원월드 ${conv.size}편을 알래스카로 적립` : ''}` : '저장했어요');
   };
@@ -246,6 +250,14 @@ export default function App() {
     }));
     setStack({ name: 'wallet' });
     say('지갑에서 뺐어요. 해당 항공편은 스카이패스 항공편으로 돌아갔어요');
+  };
+  // 지갑에 스카이패스 추가 (알래스카만으로 시작한 경우)
+  const addProgram = (id) => {
+    if (id === 'KE') {
+      if (!hasProgram(profile, 'KE')) setWallet((w) => [{ program: 'KE' }, ...w]);
+      setStack({ name: 'settings' });
+      say('스카이패스를 지갑에 넣었어요. 등급과 실적을 확인해 주세요');
+    } else setStack({ name: 'tieradd', program: id });
   };
   const patchProg = (program, patch) => setWallet((w) => w.map((x) => (x.program === program ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x)));
 
@@ -406,7 +418,7 @@ export default function App() {
             <circle cx="54" cy="40" r="4" fill="var(--panel)" stroke="var(--ink)" strokeWidth="3" />
           </svg>
           <h1>티어런</h1>
-          <p>모닝캄부터 밀리언 마일러까지,<br />탈 때마다 쌓이는 대한항공 등급 진행률을 한눈에.</p>
+          <p>대한항공 스카이패스부터 알래스카 Atmos까지,<br />항공 등급을 지갑처럼 한곳에. 탈 때마다 쌓이는 진행률을 한눈에.</p>
           {sessionStorage.getItem(INVITE_KEY) && <div className="notice info" style={{ textAlign: 'left' }}>친구 초대 링크로 들어왔어요. <b>Google로 로그인</b>하면 바로 친구가 돼요.</div>}
           <button
             className="gbtn"
@@ -440,7 +452,11 @@ export default function App() {
   }
 
   const setupNeeded = !profile;
-  const view = setupNeeded ? { name: 'settings', setup: true } : stack;
+  // 처음 설정: 등급 고르기 → (스카이패스 설정) → (알래스카 설정)
+  const view = !setupNeeded ? stack
+    : !setupPick ? { name: 'setupStart' }
+    : setupPick.programs.includes('KE') ? { name: 'settings', setup: true }
+    : { name: 'tieradd', program: 'AS', setup: true };
   const panelW = Math.min(420, Math.max(340, vw * 0.31));
   const onMap = mobile && tab === 'map' && !view;
   const selFlight = (sel && flights.find((f) => f.id === sel)) || sortFlights(flights).find((f) => f.date >= today) || sortFlights(flights).at(-1) || null;
@@ -453,22 +469,32 @@ export default function App() {
     ) : null;
 
   let content;
-  if (view?.name === 'settings') {
+  if (view?.name === 'setupStart') {
+    content = <SetupStart user={ad?.user} onNext={setSetupPick} onSample={loadSample} />;
+  } else if (view?.name === 'settings') {
     content = (
       <Settings
         key={view.setup ? 'setup' : 'settings'}
-        profile={profile}
+        profile={profile || (setupPick ? { ...emptyProfile(setupPick.name), name: setupPick.name } : null)}
+        setupTitle={view.setup ? '대한항공 스카이패스 설정' : ''}
         user={ad?.user}
         mode={ad?.mode}
         note={ad?.note}
         isSetup={!!view.setup}
         hasFlights={flights.length > 0}
         onSave={(p) => {
-          setState((s) => ({ ...s, profile: { ...p, invite: p.invite || s.profile?.invite } }));
+          const nextAS = view.setup && setupPick?.programs.includes('AS');
+          setState((s) => ({ ...s, profile: { ...p, invite: p.invite || s.profile?.invite, ...(view.setup ? { wallet: [{ program: 'KE' }] } : {}) } }));
+          setSetupPick(null);
+          if (nextAS) {
+            setStack({ name: 'tieradd', program: 'AS' });
+            say('스카이패스 설정 완료! 이어서 알래스카를 설정해요');
+            return;
+          }
           setStack(null);
           say(view.setup ? '설정 완료! 항공편을 추가해 보세요' : '저장했어요');
         }}
-        onClose={() => setStack(null)}
+        onClose={() => (view.setup ? setSetupPick(null) : setStack(null))}
         onSample={loadSample}
         onFlighty={() => setStack({ name: 'import' })}
         onExport={() => JSON.stringify({ app: 'tierrun', v: 1, ...state })}
@@ -502,7 +528,7 @@ export default function App() {
         goals={goals}
         user={ad?.user}
         onOpen={openProgram}
-        onAdd={(id) => setStack({ name: 'tieradd', program: id })}
+        onAdd={addProgram}
         onSettings={() => setStack({ name: 'settings' })}
         onFriends={social ? () => { loadFriends(true); setStack({ name: 'friends' }); } : null}
         onReorder={(w) => { setWallet(() => w); say('지갑 순서를 바꿨어요'); }}
@@ -518,7 +544,7 @@ export default function App() {
         ctx={ctx}
         onSave={saveTier}
         onDelete={() => removeTier(view.program)}
-        onClose={() => setStack(progEntry(profile, view.program) ? { name: 'program', id: view.program } : { name: 'wallet' })}
+        onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, view.program) ? { name: 'program', id: view.program } : { name: 'wallet' }))}
       />
     );
   } else if (view?.name === 'program' && asProg && view.id === 'AS') {
@@ -565,6 +591,20 @@ export default function App() {
     ) : (
       <div className="empty"><p>항공편을 찾을 수 없어요.</p><button className="btn" onClick={close}>돌아가기</button></div>
     );
+  } else if (tab === 'tier' && !hasProgram(profile, 'KE')) {
+    content = asProg ? (
+      <AlaskaView
+        prog={asProg}
+        ctx={ctx}
+        onBack={() => setStack({ name: 'wallet' })}
+        onEdit={() => setStack({ name: 'tieradd', program: 'AS' })}
+        onSetMethod={(m) => { patchProg('AS', { method: m }); say('적립 방식을 바꿨어요. 2027년 이후 항공편에 적용돼요'); }}
+        onRewards={(yr, sp, ids) => patchProg('AS', (x) => ({ rewards: { ...(x.rewards || {}), [yr]: { ...(x.rewards?.[yr] || {}), [sp]: ids } } }))}
+        onOpen={open}
+      />
+    ) : (
+      <div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div>
+    );
   } else if (tab === 'tier') {
     content = <TierView ctx={ctx} goals={goals} stats={stats} head={<Head title="등급 현황" right={avatar} />} onSettings={() => setStack({ name: 'settings' })} friendsBox={{ on: !!social, err: friendsErr, onFriends: () => { loadFriends(true); setStack({ name: 'friends' }); }, onOpen: (uid) => setStack({ name: 'friend', uid }), onMount: () => loadFriends() }} />;
   } else if (tab === 'cost') {
@@ -582,7 +622,7 @@ export default function App() {
         onAircraft={() => setStack({ name: 'aircraft' })}
         onDelete={swipeDelete}
         onProgram={openProgram}
-        onAddProgram={(id) => setStack({ name: 'tieradd', program: id })}
+        onAddProgram={(id) => (id ? addProgram(id) : setStack({ name: 'wallet' }))}
         alliance={alliance}
         setAlliance={setAlliance}
         picking={picking}

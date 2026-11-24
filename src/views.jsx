@@ -269,10 +269,11 @@ export function TierCarousel({ ctx, goals, alliance, onProgram, onAddProgram }) 
       : w.program === 'AS' ? <AsStrip key="AS" prog={w} ctx={ctx} onClick={() => onProgram('AS')} /> : null,
   ).filter(Boolean);
   if (!slides.length) {
+    const add = alliance === 'OW' ? ['AS', '원월드', '알래스카 티어를 지갑에 추가해 보세요'] : alliance === 'ST' ? ['KE', '스카이팀', '대한항공 스카이패스를 지갑에 추가해 보세요'] : alliance === 'ALL' ? [null, '티어 지갑', '지갑에 항공사 등급을 추가해 보세요'] : null;
     slides.push(
-      alliance === 'OW' ? (
-        <button key="addAS" className="strip add" onClick={() => onAddProgram('AS')}>
-          <div><div className="t">원월드</div><div className="v" style={{ fontSize: 16 }}>알래스카 티어를 지갑에 추가해 보세요</div></div>
+      add ? (
+        <button key="add" className="strip add" onClick={() => onAddProgram(add[0])}>
+          <div><div className="t">{add[1]}</div><div className="v" style={{ fontSize: 16 }}>{add[2]}</div></div>
           <Icon name="plus" size={20} />
         </button>
       ) : (
@@ -325,7 +326,7 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
             <g transform="translate(66 6) rotate(90 9 9)" fill="var(--ink)"><path d="M18 11.6v-1.5l-6-3.8V2.6a1.1 1.1 0 0 0-2.3 0v3.7l-6 3.8v1.5l6-1.9v3.8l-1.5 1.1v1.2l2.6-.8 2.6.8v-1.2l-1.4-1.1V9.7z" /></g>
           </svg>
           <h2>첫 항공편을 추가해 보세요</h2>
-          <p>편명과 구간만 넣으면 스카이패스 적립 마일과 등급 진행률이 바로 계산돼요.</p>
+          <p>편명과 구간만 넣으면 적립 마일·상태포인트와 등급 진행률이 바로 계산돼요.</p>
           <button className="btn primary" onClick={onAdd}><Icon name="plus" size={18} />항공편 추가</button>
           {onFlighty && <button className="btn sky sm" onClick={onFlighty}>Flighty 기록 가져오기</button>}
           <button className="btn ghost sm" onClick={onSample}>예시 데이터로 둘러보기</button>

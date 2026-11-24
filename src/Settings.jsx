@@ -17,7 +17,7 @@ export const emptyProfile = (name = '') => ({
 
 
 
-export default function Settings({ profile, user, mode, note, isSetup, hasFlights, onSave, onClose, onSample, onFlighty, onExport, onImport, onReset, onSignOut }) {
+export default function Settings({ profile, user, mode, note, isSetup, setupTitle, hasFlights, onSave, onClose, onSample, onFlighty, onExport, onImport, onReset, onSignOut }) {
   const [p, setP] = useState(() => ({ ...emptyProfile(user?.name || ''), ...(profile || {}), base: { ...emptyProfile().base, ...(profile?.base || {}) } }));
   const [rules, setRules] = useState(() => mergeRules(profile?.rules));
   const [imp, setImp] = useState('');
@@ -84,8 +84,8 @@ export default function Settings({ profile, user, mode, note, isSetup, hasFlight
     <div className="fade-in">
       <div className="dhead">
         <span className="mark" style={{ background: 'var(--navy-btn)', color: 'var(--navy-btn-ink)' }}><Icon name="user" size={16} /></span>
-        <div><div className="k">{isSetup ? '처음 한 번만 입력해요' : '내 정보'}</div><h2>{isSetup ? '내 등급 설정' : '설정'}</h2></div>
-        {!isSetup && <button className="icon-btn" onClick={onClose} aria-label="닫기"><Icon name="close" size={18} /></button>}
+        <div><div className="k">{isSetup ? '처음 한 번만 입력해요' : '내 정보'}</div><h2>{isSetup ? setupTitle || '내 등급 설정' : '설정'}</h2></div>
+        <button className="icon-btn" onClick={onClose} aria-label={isSetup ? '뒤로' : '닫기'}><Icon name={isSetup ? 'back' : 'close'} size={18} /></button>
       </div>
       <div className="form">
         {isSetup && (

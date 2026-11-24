@@ -35,14 +35,14 @@ export function FriendRow({ fr, ctx, onClick, right }) {
         <span className="fr-mid">
           <span className="fr-top">
             <b>{fr.name || '이름 없음'}</b>
-            <span className="tier-chip" style={{ background: t.bg, color: t.ink }}>{t.name}</span>
+            {fr.ke !== false && <span className="tier-chip" style={{ background: t.bg, color: t.ink }}>{t.name}</span>}
             {(fr.wallet || []).filter((w) => w.program === 'AS' && AS_TIER[w.tier]).map((w) => (
               <span key="AS" className="tier-chip" style={{ background: AS_TIER[w.tier].bg, color: AS_TIER[w.tier].ink }}>알래스카 {AS_TIER[w.tier].name}</span>
             ))}
           </span>
           {fr.missing ? (
             <span className="fr-sub">아직 티어런 정보가 올라오지 않았어요</span>
-          ) : g ? (
+          ) : fr.ke === false ? null : g ? (
             <>
               <span className="fr-sub num">{g.title} <b>{pct(g.conf)}</b>{g.remMi ? ` · ${fmtNum(g.remMi)}마일 남음` : ''}</span>
               <Bar conf={g.conf} plan={Math.max(0, g.all - g.conf)} thin done={g.done} />
@@ -211,6 +211,7 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
         <p className="muted" style={{ margin: '12px 20px' }}>친구가 아직 새 버전의 티어런을 열지 않아 정보가 없어요. 친구가 앱을 한 번 열면 보여요.</p>
       ) : (
         <>
+          {fr.ke !== false && (<>
           <div className="tcard" style={{ background: t.bg, color: t.ink, marginTop: 10 }}>
             <div><div className="en">{t.en}</div><div className="ko">{t.name}</div></div>
             <div className="foot num">
@@ -231,6 +232,7 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
           ) : (
             <p className="muted" style={{ margin: '12px 20px' }}>최고 등급이라 다음 목표가 없어요.</p>
           )}
+          </>)}
           {(fr.wallet || []).filter((w) => w.program === 'AS' && AS_TIER[w.tier]).map((w) => {
             const at = AS_TIER[w.tier];
             const nt = w.next ? AS_TIER[w.next] : null;

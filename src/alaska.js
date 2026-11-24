@@ -128,16 +128,18 @@ export const nextTier = (sp) => AS_TIERS.find((t) => t.sp > sp) || null;
 // 진행 상황 요약 (카드·띠용)
 export function asSummary(prog, flights, today, yr = year(today)) {
   const y = asYear(prog, flights, yr, today);
-  const nt = nextTier(y.conf);
+  const held = AS_TIER[prog?.tier] || AS_TIERS[0];
+  // 지금 등급에 못 미치면 목표는 '지금 등급 유지', 넘었으면 그 위 등급
+  const nt = y.conf < held.sp ? held : nextTier(y.conf);
   const ms = MILESTONES.find((m) => m.sp > y.conf) || null;
   return {
     ...y,
-    held: AS_TIER[prog?.tier] || AS_TIERS[0],
+    held,
     earned: tierBySP(y.conf),
     earnedPlan: tierBySP(y.all),
     next: nt,
     // 지금 등급 이하 목표면 '유지', 위면 승급
-    goal: nt ? (nt.sp <= (AS_TIER[prog?.tier] || AS_TIERS[0]).sp ? `${nt.name} 유지` : nt.name) : '',
+    goal: nt ? (nt.sp <= held.sp ? `${nt.name} 유지` : nt.name) : '',
     rem: nt ? nt.sp - y.conf : 0,
     remPlan: nt ? Math.max(0, nt.sp - y.all) : 0,
     nextMs: ms,

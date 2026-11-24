@@ -64,6 +64,56 @@ export function faceFor(entry, ctx, goals) {
   return null;
 }
 
+/* ───────── 처음 시작: 어떤 등급을 관리할지 고르기 ───────── */
+const PICK_DESC = {
+  KE: '모닝캄 · 셀렉트 · 프리미엄 · 밀리언 마일러',
+  AS: '실버(루비) · 골드(사파이어) · 플래티넘(에메랄드) · 티타늄',
+  TK: '클래식 플러스 · 엘리트 · 엘리트 플러스',
+};
+export function SetupStart({ user, onNext, onSample }) {
+  const [name, setName] = useState(user?.name || '');
+  const [pick, setPick] = useState([]);
+  const toggle = (id) => setPick((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const ordered = PROGRAM_LIST.filter((p) => pick.includes(p.id)).map((p) => p.id);
+  return (
+    <div className="fade-in">
+      <div className="dhead">
+        <span className="mark" style={{ background: 'var(--navy-btn)', color: 'var(--navy-btn-ink)' }}><Icon name="wallet" size={16} /></span>
+        <div><div className="k">처음 한 번만 입력해요</div><h2>어떤 등급을 관리할까요?</h2></div>
+        <span />
+      </div>
+      <div className="form">
+        <label className="field"><span>이름</span><input className="input" value={name} placeholder="표시할 이름" onChange={(e) => setName(e.target.value)} /></label>
+        <div className="field">
+          <span>가지고 있거나 도전할 항공사 등급 <span className="faint">(여러 개 골라도 돼요)</span></span>
+          <div className="spick">
+            {PROGRAM_LIST.map((p) => {
+              const on = pick.includes(p.id);
+              return (
+                <button key={p.id} type="button" className={`${on ? 'on' : ''} ${p.soon ? 'soon' : ''}`} disabled={p.soon} onClick={() => toggle(p.id)} aria-pressed={on}>
+                  <AirlineMark code={p.airline} />
+                  <span>
+                    <b>{p.name}</b>
+                    <small>{p.alliance === 'OW' ? '원월드' : p.alliance === 'SA' ? '스타얼라이언스' : '스카이팀'} · {p.soon ? '준비 중' : PICK_DESC[p.id]}</small>
+                  </span>
+                  <span className="ck">{on && <Icon name="check" size={14} stroke={3} />}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <p className="help" style={{ margin: 0 }}>고른 등급은 지갑에 카드로 들어가요. 나중에 오른쪽 위 프로필을 누르면 열리는 <b>지갑</b>에서 언제든 더 추가할 수 있어요.</p>
+      </div>
+      <div className="sumbar">
+        {onSample && <button className="btn ghost block" onClick={onSample}>예시 데이터로 먼저 둘러보기</button>}
+        <button className="btn primary block" disabled={!pick.length} onClick={() => onNext({ name: name.trim(), programs: ordered })}>
+          {pick.length ? `다음 · ${ordered.map((id) => PROGRAMS[id].short).join(', ')} 설정` : '1개 이상 골라 주세요'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ───────── 지갑 ───────── */
 export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onFriends, onReorder, onClose }) {
   const wallet = walletOf(ctx.profile);
@@ -107,7 +157,7 @@ export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onFrie
       </div>
       <div className="section-h"><span>메뉴</span></div>
       <div className="pad" style={{ display: 'grid', gap: 8, paddingBottom: 24 }}>
-        <button className="wmenu" onClick={onSettings}><Icon name="user" size={18} />설정 · 스카이패스 실적 입력<Icon name="chev" size={16} /></button>
+        <button className="wmenu" onClick={onSettings}><Icon name="user" size={18} />{wallet.some((w) => w.program === 'KE') ? '설정 · 스카이패스 실적 입력' : '설정 · 데이터'}<Icon name="chev" size={16} /></button>
         {onFriends && <button className="wmenu" onClick={onFriends}><Icon name="user" size={18} />친구<Icon name="chev" size={16} /></button>}
       </div>
     </div>
