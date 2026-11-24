@@ -1,6 +1,7 @@
 import { geoDistance } from 'd3-geo';
 import { findAirport } from './airports.js';
 import { KE_ROUTE_MILES, KE_CLASS_RATES, AIRLINE, DEFAULT_RULES, cabinFromClass } from './skypass.js';
+import { spFor, methodFor } from './alaska.js';
 
 /* ───────── 날짜·숫자 ───────── */
 export const pad = (n) => String(n).padStart(2, '0');
@@ -84,39 +85,44 @@ export function flightPoints(f) {
 export const isPast = (f, today) => f.date < today;
 
 /* ───────── 여정·비용 ───────── */
+// 단가 계산 단위: 스카이패스 편은 적립 마일, 알래스카 편은 상태포인트(SP)
+export const unitsOf = (f, asProg) => (f.program === 'AS' ? spFor(f, methodFor(asProg, f.date)).sp : earnedMiles(f));
 export function sortFlights(list) {
   return [...list].sort((a, b) => (a.date + (a.dep || '99')).localeCompare(b.date + (b.dep || '99')));
 }
 export function tripFlights(flights, tripId) {
   return sortFlights(flights.filter((f) => f.tripId === tripId));
 }
-// 항공편별 비용: 묶음 총액이면 적립 마일 비율로 배분
-export function flightCost(f, flights, trips) {
+// 항공편별 비용: 묶음 총액이면 적립 마일(알래스카는 상태포인트) 비율로 배분
+export function flightCost(f, flights, trips, asProg) {
   const trip = f.tripId && trips[f.tripId];
   if (trip && trip.priceMode === 'total') {
     if (trip.price == null || trip.price === '') return null;
     const group = flights.filter((x) => x.tripId === f.tripId);
-    const sum = group.reduce((s, x) => s + earnedMiles(x), 0);
-    const share = sum > 0 ? earnedMiles(f) / sum : 1 / group.length;
+    const sum = group.reduce((s, x) => s + unitsOf(x, asProg), 0);
+    const share = sum > 0 ? unitsOf(f, asProg) / sum : 1 / group.length;
     return +trip.price * share;
   }
   return f.price == null || f.price === '' ? null : +f.price;
 }
-export function costStats(flights, trips) {
+// mode: 'KE' 스카이패스 마일당 단가 · 'AS' 알래스카 포인트당 단가 (miles 필드는 그 단위의 합)
+export function costStats(flights, trips, { mode = 'KE', asProg } = {}) {
   let cost = 0, miles = 0, counted = 0;
   const byTrip = new Map();
+  const units = (f) => (mode === 'AS' ? unitsOf(f, asProg) : earnedMiles(f));
   for (const f of flights) {
-    const c = flightCost(f, flights, trips);
+    if (mode === 'AS' ? f.program !== 'AS' : f.program === 'AS') continue;
+    const c = flightCost(f, flights, trips, asProg);
     const key = f.tripId || f.id;
     if (!byTrip.has(key)) byTrip.set(key, { id: key, trip: trips[f.tripId] || null, flights: [], cost: 0, miles: 0, priced: true });
     const g = byTrip.get(key);
     g.flights.push(f);
-    g.miles += earnedMiles(f);
+    g.miles += units(f);
     if (c == null) g.priced = false;
     else g.cost += c;
-    if (c != null && f.credit !== 'NONE') {
+    if (c != null && (mode === 'AS' || f.credit !== 'NONE')) {
       cost += c;
-      miles += earnedMiles(f);
+      miles += units(f);
       counted++;
     }
   }

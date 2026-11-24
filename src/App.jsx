@@ -130,7 +130,9 @@ export default function App() {
   const flights = state.flights;
   const trips = state.trips;
   const goals = useMemo(() => computeGoals(profile || emptyProfile(), flights, today), [profile, flights, today]);
-  const stats = useMemo(() => costStats(flights, trips), [flights, trips]);
+  const asProg0 = progEntry(profile, 'AS');
+  const stats = useMemo(() => costStats(flights, trips, { asProg: asProg0 }), [flights, trips, asProg0]);
+  const asStats = useMemo(() => costStats(flights, trips, { mode: 'AS', asProg: asProg0 }), [flights, trips, asProg0]);
   // ── 친구 ──
   const social = phase === 'ready' && ad?.mode === 'firebase' && ad?.user ? ad.social : null;
   const [friends, setFriends] = useState([]);
@@ -377,7 +379,7 @@ export default function App() {
       const moved = fl.map((f) => {
         const id = uid();
         trips2[id] = { id, kind: 'oneway', priceMode: 'each', price: null };
-        const c = flightCost(f, s.flights, s.trips);
+        const c = flightCost(f, s.flights, s.trips, progEntry(s.profile, 'AS'));
         return { ...f, tripId: id, price: c != null ? Math.round(c) : f.price ?? null };
       });
       return { ...s, flights: [...s.flights.filter((f) => f.tripId !== tripId), ...moved], trips: trips2 };
@@ -391,7 +393,7 @@ export default function App() {
     const fl = sortFlights(flights.filter((f) => picking?.has(f.id)));
     if (fl.length < 2) return;
     const round = fl.length === 2 && fl[0].from === fl[1].to && fl[0].to === fl[1].from;
-    const prices = fl.map((f) => flightCost(f, flights, trips)).filter((x) => x != null);
+    const prices = fl.map((f) => flightCost(f, flights, trips, asProg)).filter((x) => x != null);
     const price = prices.length ? Math.round(prices.reduce((a, b) => a + b, 0)) : null;
     setStack({ name: 'form', group: { trip: { id: uid(), kind: round ? 'round' : 'multi', priceMode: 'total', price }, flights: fl } });
   };
@@ -622,7 +624,7 @@ export default function App() {
       content = <>{head}<div className="empty"><p>지갑에 등급이 없어요.</p><button className="btn primary" onClick={() => setStack({ name: 'wallet' })}>지갑 열기</button></div><FriendsSection ctx={ctx} box={friendsBox} /></>;
     }
   } else if (tab === 'cost') {
-    content = <CostView ctx={ctx} goals={goals} stats={stats} head={<Head title="마일당 단가" right={avatar} />} onOpen={open} />;
+    content = <CostView ctx={ctx} goals={goals} stats={stats} asStats={asStats} avatar={avatar} onOpen={open} />;
   } else {
     content = (
       <FlightsView
@@ -650,7 +652,7 @@ export default function App() {
 
   const tabsDef = mobile
     ? [['flights', '항공편', 'list'], ['map', '지도', 'globe'], ['tier', '등급', 'medal'], ['cost', '단가', 'won']]
-    : [['flights', '내 항공편', 'list'], ['tier', '등급 현황', 'medal'], ['cost', '마일당 단가', 'won']];
+    : [['flights', '내 항공편', 'list'], ['tier', '등급 현황', 'medal'], ['cost', '단가', 'won']];
   const tabbar = !view && (
     <nav className="tabbar" aria-label="메인 메뉴">
       <div className="tabs">

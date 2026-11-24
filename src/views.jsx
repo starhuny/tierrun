@@ -12,8 +12,8 @@ import { AircraftStrip } from './Aircraft.jsx';
 import { friendNames } from './social.js';
 import { walletOf, PROGRAMS, allianceOf } from './wallet.js';
 import { ALLIANCES } from './skypass.js';
-import { flightSP, spFor, METHOD, METHODS, methodFor, asCategory, CAT, isOwn, asSummary } from './alaska.js';
-import { AsStrip } from './Wallet.jsx';
+import { flightSP, spFor, METHOD, METHODS, methodFor, asCategory, CAT, isOwn, asSummary, nextTier } from './alaska.js';
+import { AsStrip, ProgSwitch } from './Wallet.jsx';
 
 export const city = (c) => findAirport(c)?.city || c || '?';
 export const routeTitle = (f) => `${city(f.from)} → ${city(f.to)}`;
@@ -34,7 +34,8 @@ export function FlightRow({ f, ctx, selected, onClick, pick }) {
   const { today, flights, trips, profile } = ctx;
   const e = earnedMiles(f);
   const p = flightPoints(f);
-  const c = flightCost(f, flights, trips);
+  const c = flightCost(f, flights, trips, ctx.asProg);
+  const sp = f.program === 'AS' ? flightSP(f, ctx.asProg).sp : 0;
   const bd = baselineDate(profile);
   const excluded = bd && f.date <= bd;
   return (
@@ -64,7 +65,7 @@ export function FlightRow({ f, ctx, selected, onClick, pick }) {
             </>
           ) : f.credit === 'NONE' ? <span className="badge gray">스카이패스 미반영</span> : <span className="chip"><b>+{fmtNum(e)}</b>마일</span>}
           {p > 0 && <span className="chip"><b>+{p}</b>P</span>}
-          {c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
+          {f.program === 'AS' ? c != null && sp > 0 && <span className="chip"><b>{fmtWon(c / sp)}</b>/포인트</span> : c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
           {!(+f.baseMiles > 0) && f.milesOverride == null && <span className="badge warn">거리 정보 없음</span>}
           <CabinBadge f={f} />
           {f.aircraft && <span className="badge gray">{f.aircraft}</span>}
@@ -451,7 +452,10 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
   const a = findAirport(f.from), b = findAirport(f.to);
   const e = earnedMiles(f);
   const p = flightPoints(f);
-  const cost = flightCost(f, flights, trips);
+  const cost = flightCost(f, flights, trips, ctx.asProg);
+  const isAS = f.program === 'AS';
+  const units = isAS ? flightSP(f, ctx.asProg).sp : e;
+  const U = isAS ? '포인트' : '마일';
   const trip = f.tripId ? trips[f.tripId] : null;
   const sibs = f.tripId ? tripFlights(flights, f.tripId) : [f];
   const contrib = contributionOf(f, profile);
@@ -548,14 +552,14 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
         )}
 
         <div className="card">
-          <div className="card-h"><span>비용</span>{trip?.priceMode === 'total' && <span className="faint">묶음 총액을 마일 비율로 배분</span>}</div>
+          <div className="card-h"><span>비용</span>{trip?.priceMode === 'total' && <span className="faint">묶음 총액을 {isAS ? '상태포인트' : '적립 마일'} 비율로 배분</span>}</div>
           {cost == null ? (
-            <p className="muted" style={{ margin: 0, fontSize: 14 }}>운임을 넣으면 마일당 단가를 계산해요. <button className="link" onClick={onEdit}>운임 입력</button></p>
+            <p className="muted" style={{ margin: 0, fontSize: 14 }}>운임을 넣으면 {U}당 단가를 계산해요. <button className="link" onClick={onEdit}>운임 입력</button></p>
           ) : (
             <div className="kv num">
               {trip?.priceMode === 'total' && <div><span className="k">여정 총액 ({sibs.length}구간)</span><span className="v">{fmtWon(trip.price)}</span></div>}
               <div><span className="k">이 구간 운임</span><span className="v">{fmtWon(cost)}</span></div>
-              <div><span className="k">마일당 단가</span><span className="v" style={{ fontSize: 18 }}>{e > 0 ? fmtWon(cost / e) : '–'}</span></div>
+              <div><span className="k">{U}당 단가{isAS ? ' (상태포인트)' : ''}</span><span className="v" style={{ fontSize: 18 }}>{units > 0 ? fmtWon(cost / units) : '–'}</span></div>
             </div>
           )}
         </div>
@@ -755,10 +759,30 @@ export function TierView({ ctx, goals, stats, head, onSettings, friendsBox }) {
 }
 
 /* ───────── 비용 ───────── */
-export function CostView({ ctx, goals, stats, head, onOpen }) {
-  const { today, profile } = ctx;
-  const h = goals.headline;
-  const mileOpt = h ? h.options.find((o) => o.parts.every((p) => p.unit === 'mi')) : null;
+export function CostView({ ctx, goals, stats: keStats, asStats, avatar, onOpen }) {
+  const { today, profile, asProg } = ctx;
+  // 스카이패스(마일당) ↔ 알래스카(포인트당): 지갑 순서대로, 기본은 1순위
+  const modes = walletOf(profile).map((w) => w.program).filter((p) => p === 'KE' || (p === 'AS' && asProg));
+  const [mode0, setMode] = useState(null);
+  const mode = modes.includes(mode0) ? mode0 : modes[0] || 'KE';
+  const isAS = mode === 'AS';
+  const stats = isAS ? asStats : keStats;
+  const U = isAS ? '포인트' : '마일';
+  const per = (v) => `${fmtWon(v)}/${U}`;
+  const h = isAS ? null : goals.headline;
+  // 알래스카는 달력 연도 기준: 내년 항공편이 잡혀 있으면 내년 기준으로 남은 양 계산
+  const ny = +today.slice(0, 4) + 1;
+  const asYr = isAS && ctx.flights.some((f) => f.program === 'AS' && +f.date.slice(0, 4) === ny) ? ny : +today.slice(0, 4);
+  const asS = isAS ? asSummary(asProg, ctx.flights, today, asYr) : null;
+  // 다음 등급까지 남은 양 (예정 항공편 이후)
+  const left = isAS ? (() => {
+    // 예정 항공편까지 다 탄 뒤의 다음 목표 (지금 등급에 못 미치면 유지, 넘으면 그 위 등급)
+    const t = asS.all < asS.held.sp ? asS.held : nextTier(asS.all);
+    return t ? { name: `${asYr}년 ${t.sp <= asS.held.sp ? `${t.name} 유지` : t.name}`, rem: t.sp - asS.all } : null;
+  })() : (() => {
+    const o = h ? h.options.find((x) => x.parts.every((p) => p.unit === 'mi')) : null;
+    return o && !h.done ? { name: TIER[h.target].name, rem: o.remMiPlan } : null;
+  })();
   const priced = stats.groups.filter((g) => g.perMile != null);
   const unpriced = stats.groups.filter((g) => g.perMile == null && g.miles > 0);
   const maxPM = Math.max(1, ...priced.map((g) => g.perMile));
@@ -772,10 +796,10 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
   const months = useMemo(() => {
     const m = new Map();
     for (const f of ctx.flights) {
-      if (f.credit === 'NONE') continue;
+      if (isAS ? f.program !== 'AS' : f.program === 'AS' || f.credit === 'NONE') continue;
       const k = f.date.slice(0, 7);
       if (!m.has(k)) m.set(k, { c: 0, p: 0 });
-      m.get(k)[f.date < today ? 'c' : 'p'] += earnedMiles(f);
+      m.get(k)[f.date < today ? 'c' : 'p'] += isAS ? flightSP(f, asProg).sp : earnedMiles(f);
     }
     if (!m.size) return [];
     const [ty, tm] = today.split('-').map(Number);
@@ -787,7 +811,7 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
       out.push({ k, y, mo, now: d === 0, ...(m.get(k) || { c: 0, p: 0 }) });
     }
     return out;
-  }, [ctx.flights, today]);
+  }, [ctx.flights, today, isAS, asProg]);
   const mmax = Math.max(1, ...months.map((x) => x.c + x.p));
   const tripTitle = (g) => {
     const fl = g.flights;
@@ -802,33 +826,35 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
       </div>
       <div>
         <div className={`pm ${g.perMile === bestPM && priced.length > 1 ? 'best' : ''}`}>{fmtWon(g.perMile)}</div>
-        <div className="sub">{fmtWonShort(g.cost)} · {fmtNum(g.miles)}마일</div>
+        <div className="sub">{fmtWonShort(g.cost)} · {fmtNum(g.miles)}{isAS ? ' SP' : '마일'}</div>
       </div>
       <Bar conf={g.perMile / maxPM} thin />
     </button>
   );
   return (
     <>
-      {head}
+      <Head title={isAS ? '포인트당 단가' : '마일당 단가'} right={avatar} />
+      {modes.length > 1 && <ProgSwitch list={modes.map((p) => ({ program: p }))} value={mode} onChange={setMode} />}
       <div className="hero-num num">
-        <div className="faint" style={{ fontSize: 13, fontWeight: 700 }}>평균 마일당 단가</div>
-        <div className="v">{stats.perMile ? fmtWon(stats.perMile) : '–'}<small>/마일</small></div>
-        <div className="s">{stats.counted ? `운임 입력한 ${stats.counted}구간 · 총 ${fmtWon(stats.cost)} · ${fmtNum(stats.miles)}마일` : '항공편에 운임을 넣으면 마일당 단가를 계산해요.'}</div>
+        <div className="faint" style={{ fontSize: 13, fontWeight: 700 }}>{isAS ? '알래스카 평균 포인트당 단가' : '평균 마일당 단가'}</div>
+        <div className="v">{stats.perMile ? fmtWon(stats.perMile) : '–'}<small>/{U}</small></div>
+        <div className="s">{stats.counted ? `운임 입력한 ${stats.counted}구간 · 총 ${fmtWon(stats.cost)} · ${fmtNum(stats.miles)}${isAS ? ' SP' : '마일'}` : `항공편에 운임을 넣으면 ${U}당 단가를 계산해요.`}</div>
+        {isAS && <div className="s">상태포인트(SP) 1점을 얻는 데 든 비용이에요. 적립 방식(거리·달러·구간)에 따라 달라져요.</div>}
       </div>
-      {mileOpt && stats.perMile && !h.done && (
+      {left && stats.perMile && left.rem > 0 && (
         <div className="pad" style={{ marginTop: 10 }}>
           <div className="card" style={{ background: 'var(--sky-soft)', border: 0 }}>
-            <div className="card-h" style={{ color: 'var(--sky-ink)' }}>{TIER[h.target].name}까지 예상 비용</div>
-            <div className="num" style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.03em' }}>약 {fmtWonShort(stats.perMile * mileOpt.remMiPlan)}</div>
-            <div className="help num">예정 항공편 이후 남은 {fmtNum(mileOpt.remMiPlan)}마일 × 평균 {fmtWon(stats.perMile)}</div>
+            <div className="card-h" style={{ color: 'var(--sky-ink)' }}>{left.name}까지 예상 비용</div>
+            <div className="num" style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.03em' }}>약 {fmtWonShort(stats.perMile * left.rem)}</div>
+            <div className="help num">예정 항공편 이후 남은 {fmtNum(left.rem)}{isAS ? ' SP' : '마일'} × 평균 {per(stats.perMile)}</div>
           </div>
         </div>
       )}
       {months.length > 0 && (
         <div className="pad" style={{ marginTop: 10 }}>
           <div className="card">
-            <div className="card-h"><span>월별 적립 마일 <span className="faint" style={{ fontWeight: 600 }}>· 앞뒤 6개월</span></span><span className="legend"><span>확정</span><span className="p">예정</span></span></div>
-            <div className="months" role="img" aria-label="월별 적립 마일 막대">
+            <div className="card-h"><span>월별 적립 {isAS ? '상태포인트' : '마일'} <span className="faint" style={{ fontWeight: 600 }}>· 앞뒤 6개월</span></span><span className="legend"><span>확정</span><span className="p">예정</span></span></div>
+            <div className="months" role="img" aria-label={`월별 적립 ${U} 막대`}>
               {months.map((x) => (
                 <div className={`m ${x.now ? 'now' : ''}`} key={x.k} title={`${x.k} · 확정 ${fmtNum(x.c)} · 예정 ${fmtNum(x.p)}`}>
                   {x.p > 0 && <i className="p" style={{ height: `${(x.p / mmax) * 100}%` }} />}
@@ -861,7 +887,7 @@ export function CostView({ ctx, goals, stats, head, onOpen }) {
           <div className="section-h"><span>운임 미입력</span><span className="faint">{unpriced.length}개 여정</span></div>
           {unpriced.map((g) => (
             <button className="trow num" key={g.id} onClick={() => onOpen(g.flights[0].id)}>
-              <div><div className="rt">{tripTitle(g)}</div><div className="dt">{fmtDate(g.flights[0].date, { weekday: false })} · {fmtNum(g.miles)}마일</div></div>
+              <div><div className="rt">{tripTitle(g)}</div><div className="dt">{fmtDate(g.flights[0].date, { weekday: false })} · {fmtNum(g.miles)}{isAS ? ' SP' : '마일'}</div></div>
               <div className="sub" style={{ alignSelf: 'center' }}>입력하기 <Icon name="chev" size={14} /></div>
             </button>
           ))}

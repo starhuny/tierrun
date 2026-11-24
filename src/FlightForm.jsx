@@ -256,7 +256,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], profi
       <div className="sumbar">
         <div className="line num">
           <span>적립 {totalMiles > 0 || !totalSP ? <b>{fmtNum(totalMiles)}마일</b> : null}{totalPts ? ` · +${totalPts}P` : ''}{totalSP ? <>{totalMiles > 0 ? ' · ' : ''}<b>{fmtNum(totalSP)} SP</b></> : null}</span>
-          <span>{totalCost ? <>{fmtWon(totalCost)} · <b>{totalMiles ? fmtWon(totalCost / totalMiles) : '–'}</b>/마일</> : '운임 미입력'}</span>
+          <span>{totalCost ? (totalMiles > 0 || !totalSP ? <>{fmtWon(totalCost)} · <b>{totalMiles ? fmtWon(totalCost / totalMiles) : '–'}</b>/마일</> : <>{fmtWon(totalCost)} · <b>{fmtWon(totalCost / totalSP)}</b>/포인트</>) : '운임 미입력'}</span>
         </div>
         {tried && !valid && <div className="err-t">출발·도착 공항과 날짜를 모든 구간에 넣어 주세요.</div>}
         <button className="btn primary block" onClick={save}>{grouping ? `${segs.length}편을 여정으로 묶기` : editing ? '저장' : `${segs.length}개 구간 추가`}</button>
