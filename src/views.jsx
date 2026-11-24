@@ -104,11 +104,11 @@ export function MapStrip({ ctx, selId, onSel, onOpen }) {
   if (!list.length) return null;
   return (
     <div className="map-strip-wrap">
-      {list.length > 1 && <div className="map-count num">{shown + 1} / {list.length}</div>}
       <div className="map-strip" ref={ref} onScroll={onScroll}>
-        {list.map((f) => (
+        {list.map((f, i) => (
           <div key={f.id} className="map-slide">
             <FlightRow f={f} ctx={ctx} onClick={() => onOpen(f.id)} />
+            {list.length > 1 && <span className="map-idx num" aria-label={`${list.length}편 중 ${i + 1}번째`}>{i + 1} / {list.length}</span>}
           </div>
         ))}
       </div>
