@@ -4,7 +4,7 @@ import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
 import { lookupFlight, LOOKUP_SOURCE } from './lookup.js';
-import { AIRCRAFT_NAMES, normAircraft } from './aircraft.js';
+import { AIRCRAFT_GROUPS, normAircraft, isKnownAircraft } from './aircraft.js';
 import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark, DateInput } from './ui.jsx';
 
 const blank = (o = {}) => ({
@@ -334,14 +334,13 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
       <div className="row2" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)' }}>
         <label className="field">
           <span>기종 <span className="faint">(선택)</span></span>
-          <input className="input" list="aircraft-list" value={s.aircraft || ''} placeholder="예: B787-10" autoCapitalize="characters" onChange={(ev) => onChange({ aircraft: ev.target.value })} onBlur={() => s.aircraft && onChange({ aircraft: normAircraft(s.aircraft) })} />
+          <AircraftSelect value={s.aircraft || ''} onChange={(v) => onChange({ aircraft: v })} />
         </label>
         <label className="field">
           <span>기체 번호 <span className="faint">(선택)</span></span>
           <input className="input num" value={s.reg || ''} placeholder="예: HL8082" autoCapitalize="characters" onChange={(ev) => onChange({ reg: ev.target.value.toUpperCase().replace(/\s/g, '') })} />
         </label>
       </div>
-      <datalist id="aircraft-list">{AIRCRAFT_NAMES.map((n) => <option key={n} value={n} />)}</datalist>
       <div className="field">
         <span>실적 구분</span>
         <Seg small light options={Object.entries(CREDIT).map(([k, v]) => [k, v.short])} value={s.credit} onChange={(v) => onChange({ credit: v, creditTouched: true })} />
@@ -375,5 +374,31 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
       )}
       {showPrice && <label className="field"><span>운임</span><WonInput value={s.price} onChange={(v) => onChange({ price: v })} /></label>}
     </div>
+  );
+}
+
+// 기종 고르기: 목록에서 선택, 없으면 '직접 입력'
+function AircraftSelect({ value, onChange }) {
+  const [custom, setCustom] = useState(() => !!value && !isKnownAircraft(value));
+  if (custom) {
+    return (
+      <div className="inbtn">
+        <input className="input" value={value} placeholder="기종 직접 입력" autoFocus={!value} onChange={(ev) => onChange(ev.target.value)} onBlur={() => value && onChange(normAircraft(value))} />
+        <button type="button" className="in-btn" onMouseDown={(ev) => ev.preventDefault()} onClick={() => { const n = normAircraft(value); onChange(isKnownAircraft(n) ? n : ''); setCustom(false); }} aria-label="목록에서 고르기" title="목록에서 고르기">
+          <Icon name="list" size={17} />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <select className="input" value={value} onChange={(ev) => (ev.target.value === '__' ? (setCustom(true), onChange('')) : onChange(ev.target.value))}>
+      <option value="">선택 안 함</option>
+      {AIRCRAFT_GROUPS.map(([g, list]) => (
+        <optgroup key={g} label={g}>
+          {list.map(([n]) => <option key={n} value={n}>{n}</option>)}
+        </optgroup>
+      ))}
+      <option value="__">직접 입력…</option>
+    </select>
   );
 }

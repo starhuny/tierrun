@@ -8,6 +8,7 @@ import FlightForm from './FlightForm.jsx';
 import ImportFlighty from './ImportFlighty.jsx';
 import { FriendsView, FriendView } from './Friends.jsx';
 import { AircraftView } from './Aircraft.jsx';
+import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
 
 // 초대 링크(?f=토큰)로 들어오면 로그인 전까지 기억해 두고 주소에서는 지움
@@ -80,7 +81,12 @@ export default function App() {
     try {
       const s0 = await a.load();
       // 아시아나 편은 대한항공 실적으로 (예전에 '제휴'로 저장된 것 고침)
-      const s = { ...s0, flights: (s0.flights || []).map((f) => (f.airline === 'OZ' && f.credit === 'OT' ? { ...f, credit: 'KE' } : f)) };
+      // 기종 이름도 목록 표기로 맞춤 (A321 → A321ceo 등)
+      const s = { ...s0, flights: (s0.flights || []).map((f) => {
+        let g = f.airline === 'OZ' && f.credit === 'OT' ? { ...f, credit: 'KE' } : f;
+        if (g.aircraft && normAircraft(g.aircraft) !== g.aircraft) g = { ...g, aircraft: normAircraft(g.aircraft) };
+        return g;
+      }) };
       setState(s);
       loaded.current = true;
       setPhase('ready');
@@ -394,7 +400,7 @@ export default function App() {
     const fr = friends.find((x) => x.uid === view.uid);
     content = fr ? <FriendView fr={fr} ctx={ctx} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
   } else if (view?.name === 'aircraft') {
-    content = <AircraftView ctx={ctx} onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'aircraft' }); }} onClose={() => setStack(null)} />;
+    content = <AircraftView ctx={ctx} onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'aircraft' }); }} onClose={() => setStack(null)} onFriend={(uid) => setStack({ name: 'friend', uid })} />;
   } else if (view?.name === 'import') {
     content = <ImportFlighty ctx={ctx} onImport={importFlights} onClose={() => setStack(null)} onSettings={() => setStack({ name: 'settings' })} />;
   } else if (view?.name === 'form') {

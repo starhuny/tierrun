@@ -482,3 +482,14 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .ac-fl .r { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ac-fl .d { grid-column: 2 / -1; font-size: 12px; color: var(--ink-3); }
 .ac-fl:hover { background: var(--bg-2); }
+.ac-rank { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 0; font-size: 14px; }
+.ac-rank + .ac-rank { border-top: 1px solid var(--line); }
+.ac-rank .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--sky-soft); color: var(--sky-ink); font-size: 12px; font-weight: 800; }
+.ac-rank .c { color: var(--ink-2); font-size: 13px; }
+.ac-rank .c b { color: var(--ink); font-size: 16px; }
+.ac-rank .me { font-size: 12px; color: var(--ink-3); min-width: 44px; text-align: right; }
+.ac-friend { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 10px 16px; text-align: left; }
+.ac-friend + .ac-friend { border-top: 1px solid var(--line); }
+.ac-friend:hover { background: var(--panel-2); }
+.ac-friend .mid { display: grid; min-width: 0; }
+.ac-friend .mid span { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

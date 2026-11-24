@@ -3,6 +3,7 @@ import { aircraftFamily } from './aircraft.js';
 import { fmtDate, fmtNum, sortFlights, earnedMiles } from './core.js';
 import { findAirport } from './airports.js';
 import { Icon, AirlineMark, Bar, Seg } from './ui.jsx';
+import { FriendFace } from './Friends.jsx';
 
 const city = (c) => findAirport(c)?.city || c || '?';
 
@@ -50,7 +51,7 @@ export function AircraftStrip({ flights, today, onClick }) {
   );
 }
 
-export function AircraftView({ ctx, onOpen, onClose }) {
+export function AircraftView({ ctx, onOpen, onClose, onFriend }) {
   const { flights, today } = ctx;
   const [mode, setMode] = useState('all');
   const [open, setOpen] = useState(null);
@@ -118,6 +119,24 @@ export function AircraftView({ ctx, onOpen, onClose }) {
           </div>
         </div>
       ))}
+
+      {(ctx.friends || []).some((fr) => fr.aircraft?.top?.length) && (
+        <>
+          <div className="section-h"><span>친구들이 많이 탄 기종</span><span className="faint">탑승 완료 기준</span></div>
+          <div className="card ac-card">
+            {ctx.friends.filter((fr) => fr.aircraft?.top?.length).map((fr) => (
+              <button key={fr.uid} className="ac-friend" onClick={() => onFriend?.(fr.uid)}>
+                <FriendFace fr={fr} size={32} />
+                <span className="mid">
+                  <b>{fr.name || '친구'}</b>
+                  <span className="num">{fr.aircraft.top.map((a) => `${a.name} ${a.count}회`).join(' · ')}</span>
+                </span>
+                <span className="faint num" style={{ fontSize: 12 }}>{fr.aircraft.types}종</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {st.missing.length > 0 && (
         <>

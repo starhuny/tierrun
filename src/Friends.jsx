@@ -4,6 +4,7 @@ import { fmtDate, fmtDot, fmtNum, daysBetween } from './core.js';
 import { findAirport } from './airports.js';
 import { Icon, AirlineMark, Bar } from './ui.jsx';
 import { inviteLink, flightKey } from './social.js';
+import { aircraftTop } from './aircraft.js';
 
 const city = (c) => findAirport(c)?.city || c || '?';
 
@@ -44,6 +45,9 @@ export function FriendRow({ fr, ctx, onClick, right }) {
             </>
           ) : (
             <span className="fr-sub">최고 등급이에요</span>
+          )}
+          {fr.aircraft?.top?.[0] && (
+            <span className="fr-sub num">많이 탄 기종 <b>{fr.aircraft.top[0].name}</b> {fr.aircraft.top[0].count}회{fr.aircraft.types > 1 ? ` · 총 ${fr.aircraft.types}종` : ''}</span>
           )}
           {nx && (
             <span className="fr-sub num">
@@ -128,7 +132,7 @@ export function FriendsView({ ctx, social, err, invite, onOpen, onRemove, onRese
                     <button className="btn sm sky" onClick={copy}><Icon name="copy" size={15} />링크 복사</button>
                     {typeof navigator !== 'undefined' && navigator.share ? <button className="btn sm primary" onClick={share}>공유하기</button> : <button className="btn sm" onClick={copy}>카톡에 붙여넣기용 복사</button>}
                   </div>
-                  <p className="help" style={{ margin: '10px 0 0' }}>이 링크를 연 사람은 <b>바로 친구</b>가 돼요(로그인 필요). 친구에게는 <b>등급 카드, 다음 등급 진행률, 다가오는 항공편</b>(편명·날짜·노선·시각·좌석 등급)만 보여요. 운임, 지난 항공편, 메모, 설정 숫자는 보이지 않아요.</p>
+                  <p className="help" style={{ margin: '10px 0 0' }}>이 링크를 연 사람은 <b>바로 친구</b>가 돼요(로그인 필요). 친구에게는 <b>등급 카드, 다음 등급 진행률, 다가오는 항공편</b>(편명·날짜·노선·시각·좌석 등급·기종), <b>많이 탄 기종 순위</b>만 보여요. 운임, 지난 항공편, 메모, 설정 숫자는 보이지 않아요.</p>
                   {resetAsk ? (
                     <div className="row2" style={{ marginTop: 8 }}>
                       <button className="btn sm danger" onClick={() => { onReset(); setResetAsk(false); }}>새 링크 만들기</button>
@@ -185,6 +189,11 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
   const mineMap = useMemo(() => new Map(ctx.flights.filter((f) => f.date >= today).map((f) => [flightKey(f), f])), [ctx.flights, today]);
   const up = (fr.upcoming || []).filter((u) => u.date >= today);
   const dleft = fr.periodEnd ? daysBetween(today, fr.periodEnd) : null;
+  const myTop = useMemo(() => {
+    const m = new Map();
+    for (const f of ctx.flights) if (f.aircraft && f.date < today) m.set(f.aircraft, (m.get(f.aircraft) || 0) + 1);
+    return m;
+  }, [ctx.flights, today]);
   return (
     <div className="fade-in">
       <div className="dhead">
@@ -215,6 +224,24 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
             </div>
           ) : (
             <p className="muted" style={{ margin: '12px 20px' }}>최고 등급이라 다음 목표가 없어요.</p>
+          )}
+          {fr.aircraft?.top?.length > 0 && (
+            <div className="pad" style={{ marginTop: 12 }}>
+              <div className="card">
+                <div className="card-h"><span>많이 탄 기종</span><span className="faint num">총 {fr.aircraft.types}종</span></div>
+                {fr.aircraft.top.map((a, i) => {
+                  const mine = myTop.get(a.name) || 0;
+                  return (
+                    <div key={a.name} className="ac-rank num">
+                      <span className="n">{i + 1}</span>
+                      <b>{a.name}</b>
+                      <span className="c"><b>{a.count}</b>회</span>
+                      <span className="me">나 {mine}회</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{up.length}편</span></div>
           {up.length === 0 && <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>예정된 항공편이 없어요.</p>}

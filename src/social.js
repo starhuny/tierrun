@@ -1,6 +1,7 @@
 // 친구에게 공유하는 요약과 '같은 비행기' 찾기
 import { sortFlights, cabinOf } from './core.js';
 import { TIER } from './skypass.js';
+import { aircraftTop } from './aircraft.js';
 
 export const INVITE_PARAM = 'f';
 export const INVITE_KEY = 'tierrun:invite';
@@ -33,6 +34,8 @@ export function buildPublic({ profile, user, flights, goals, today }) {
           done: !!h.done,
         }
       : null,
+    // 많이 탄 기종 순위(탑승 완료 기준, 횟수만)
+    aircraft: aircraftTop(flights, today, 3),
     upcoming: sortFlights(flights)
       .filter((f) => f.date >= today)
       .slice(0, 40)
