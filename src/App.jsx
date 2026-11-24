@@ -12,6 +12,8 @@ import { normAircraft } from './aircraft.js';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
 import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './Wallet.jsx';
 import { AccorAddView, AccorView, StayForm } from './Accor.jsx';
+import { dailyFx, cachedFx, effectiveEur } from './fx.js';
+import { DEFAULT_EUR } from './accor.js';
 import { walletOf, progEntry, hasProgram } from './wallet.js';
 import { flightSP } from './alaska.js';
 
@@ -130,6 +132,16 @@ export default function App() {
   const profile = state.profile;
   const flights = state.flights;
   const trips = state.trips;
+  // 유로 환율: 하루 한 번 받아 옴 (아코르 등급 포인트 추정용)
+  const [fx, setFx] = useState(() => cachedFx());
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const run = () => dailyFx().then((v) => v && setFx(v));
+    run();
+    const onVis = () => document.visibilityState === 'visible' && run();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [phase]);
   const goals = useMemo(() => computeGoals(profile || emptyProfile(), flights, today), [profile, flights, today]);
   const asProg0 = progEntry(profile, 'AS');
   const stats = useMemo(() => costStats(flights, trips, { asProg: asProg0 }), [flights, trips, asProg0]);
@@ -184,14 +196,14 @@ export default function App() {
   // 친구에게 보여줄 요약 올리기 (바뀌었을 때만)
   useEffect(() => {
     if (!social || !profile || profile.sample) return;
-    const sum = buildPublic({ profile, user: ad.user, flights, goals, today, stays: state.stays || [] });
+    const sum = buildPublic({ profile: { ...profile, wallet: walletOf(profile).map((w) => (w.program === 'ALL' && acProg ? acProg : w)) }, user: ad.user, flights, goals, today, stays: state.stays || [] });
     const json = JSON.stringify(sum);
     if (json === lastPub.current) return;
     const t = setTimeout(() => {
       social.publish(sum).then(() => { lastPub.current = json; }).catch(() => {});
     }, 1500);
     return () => clearTimeout(t);
-  }, [social, profile, flights, goals, today, ad, state.stays]);
+  }, [social, profile, flights, goals, today, ad, state.stays, fx]);
   const together = useMemo(() => togetherMap(flights, friends, today), [flights, friends, today]);
   // 새 버전 배포 알림 (열어 둔 화면이 예전 버전이면 새로고침 안내)
   const [newVer, setNewVer] = useState(false);
@@ -227,7 +239,8 @@ export default function App() {
   };
 
   const asProg = progEntry(profile, 'AS');
-  const acProg = progEntry(profile, 'ALL');
+  const acRaw = progEntry(profile, 'ALL');
+  const acProg = acRaw ? { ...acRaw, eur: effectiveEur(acRaw, fx, DEFAULT_EUR) } : null;
   const stays = state.stays || [];
   const ctx = { flights, trips, profile, today, user: ad?.user, together, friends, asProg, acProg, stays };
   const [alliance, setAlliance] = useState('ALL');
@@ -588,6 +601,7 @@ export default function App() {
       <AccorAddView
         key="ALL"
         entry={progEntry(profile, 'ALL')}
+        fx={fx}
         ctx={ctx}
         onSave={(e) => saveTier(e, {}, view.queue || [])}
         onDelete={() => removeTier('ALL')}

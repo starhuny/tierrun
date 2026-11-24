@@ -294,7 +294,7 @@ export function TierCarousel({ ctx, goals, alliance, onProgram, onAddProgram }) 
   const slides = list.map((w) =>
     w.program === 'KE' ? <TierStrip key="KE" goals={goals} profile={ctx.profile} onClick={() => onProgram('KE')} />
       : w.program === 'AS' ? <AsStrip key="AS" prog={w} ctx={ctx} onClick={() => onProgram('AS')} />
-      : w.program === 'ALL' ? <AcStrip key="ALL" prog={w} ctx={ctx} onClick={() => onProgram('ALL')} /> : null,
+      : w.program === 'ALL' ? <AcStrip key="ALL" prog={ctx.acProg || w} ctx={ctx} onClick={() => onProgram('ALL')} /> : null,
   ).filter(Boolean);
   if (!slides.length) {
     const add = alliance === 'OW' ? ['AS', '원월드', '알래스카 티어를 지갑에 추가해 보세요'] : alliance === 'ST' ? ['KE', '스카이팀', '대한항공 스카이패스를 지갑에 추가해 보세요'] : alliance === 'HOTEL' ? ['ALL', '호텔', '아코르 ALL 티어를 지갑에 추가해 보세요'] : alliance === 'ALL' ? [null, '티어 지갑', '지갑에 항공사 등급을 추가해 보세요'] : null;

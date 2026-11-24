@@ -41,7 +41,7 @@ function asFace(prog, flights, today) {
 export function faceFor(entry, ctx, goals) {
   if (entry.program === 'KE') return keFace(ctx.profile, goals);
   if (entry.program === 'AS') return asFace(entry, ctx.flights, ctx.today);
-  if (entry.program === 'ALL') return acFace(entry, ctx.stays || [], ctx.today);
+  if (entry.program === 'ALL') return acFace(ctx.acProg || entry, ctx.stays || [], ctx.today);
   return null;
 }
 

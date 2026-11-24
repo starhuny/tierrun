@@ -37,7 +37,7 @@ export function AcStrip({ prog, ctx, onClick }) {
 }
 
 /* ───────── 티어 추가·수정 ───────── */
-export function AccorAddView({ entry, ctx, onSave, onDelete, onClose }) {
+export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
   const yr = thisYear(ctx.today);
   const editing = !!entry;
   const [tier, setTier] = useState(entry?.tier || 'CLASSIC');
@@ -48,7 +48,8 @@ export function AccorAddView({ entry, ctx, onSave, onDelete, onClose }) {
   const [explorerDate, setExplorerDate] = useState(entry?.explorerDate || '');
   const [zh, setZh] = useState(!!entry?.zh);
   const [fast, setFast] = useState(entry?.fast || []);
-  const [eur, setEur] = useState(entry?.eur || DEFAULT_EUR);
+  const [eur, setEur] = useState(entry?.eur || fx?.rate || DEFAULT_EUR);
+  const [eurAuto, setEurAuto] = useState(entry?.eurAuto !== false);
   const [ask, setAsk] = useState(false);
   const save = () => {
     const changed = (+nights || 0) !== (+entry?.nights || 0) || (+points || 0) !== (+entry?.points || 0);
@@ -56,7 +57,7 @@ export function AccorAddView({ entry, ctx, onSave, onDelete, onClose }) {
     const baseDate = !has ? '' : changed || !entry?.baseDate ? todayISO() : entry.baseDate;
     onSave({
       ...(entry || {}), program: 'ALL', tier, validUntil, nights: +nights || 0, points: +points || 0, baseDate,
-      explorer, explorerDate: explorer ? explorerDate : '', zh, eur: +eur || DEFAULT_EUR,
+      explorer, explorerDate: explorer ? explorerDate : '', zh, eurAuto, eur: eurAuto ? fx?.rate || +eur || DEFAULT_EUR : +eur || DEFAULT_EUR,
       fast: fast.filter((f) => f.date && +f.nights > 0).map((f) => ({ ...f, nights: +f.nights })),
     });
   };
@@ -110,10 +111,14 @@ export function AccorAddView({ entry, ctx, onSave, onDelete, onClose }) {
           <button className="btn sm ghost" onClick={() => setFast((l) => [...l, { date: todayISO(), nights: null, label: '패스트트랙' }])}><Icon name="plus" size={15} />보너스 박 추가</button>
           <p className="help" style={{ margin: 0 }}>들어오는 날짜를 넣어 주세요. 오늘 이후면 예정, 지났으면 확정으로 더해요(위 숫자를 입력한 날 이전 것은 이미 포함된 걸로 봐요).</p>
         </div>
-        <label className="field">
-          <span>환율 <span className="faint">(숙박 금액 원화 → 유로, 등급 포인트 추정용)</span></span>
-          <NumInput value={eur} suffix="원 / 1유로" onChange={setEur} />
-        </label>
+        <div className="segcard">
+          <div className="sh">환율 <span className="faint" style={{ fontWeight: 600, fontSize: 12 }}>숙박 금액 원화 → 유로 (등급 포인트 추정용)</span></div>
+          <label className="checkrow light">
+            <input type="checkbox" checked={eurAuto} onChange={(e) => setEurAuto(e.target.checked)} />
+            <span>매일 자동으로 맞추기 <small>{fx ? `오늘 1유로 = ${fmtNum(fx.rate)}원 · ${fx.date ? `${fmtDot(fx.date)} 기준 · ` : ''}${fx.source}` : '환율을 아직 받아오지 못했어요 (기본값 사용)'}</small></span>
+          </label>
+          {!eurAuto && <label className="field"><span>직접 입력</span><NumInput value={eur} suffix="원 / 1유로" onChange={setEur} /></label>}
+        </div>
         {editing && (
           ask ? (
             <div className="row2">
