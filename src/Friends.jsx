@@ -233,6 +233,7 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
                   </div>
                   <div className="fchips">
                     <span className={`badge cabin-${u.cabin || 'Y'}`}>{CABIN[u.cabin]?.name || '일반석'}</span>
+                    {u.aircraft && <span className="badge gray">{u.aircraft}</span>}
                     {same && <span className="badge together"><Icon name="user" size={12} />나도 탑승 · 같이 가요</span>}
                     {!AIRLINE[u.airline] && <span className="badge gray">{u.airline}</span>}
                   </div>

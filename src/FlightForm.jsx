@@ -4,12 +4,13 @@ import { findAirport } from './airports.js';
 import { baseMilesFor, defaultCredit, keClassRate, earnedMiles, flightPoints, fmtNum, fmtWon, uid, SOURCE_LABEL, gcMiles } from './core.js';
 import { aiFill } from './ai.js';
 import { lookupFlight, LOOKUP_SOURCE } from './lookup.js';
+import { AIRCRAFT_NAMES, normAircraft } from './aircraft.js';
 import { Icon, RateSlider, AirportInput, WonInput, NumInput, Seg, AirlineMark, DateInput } from './ui.jsx';
 
 const blank = (o = {}) => ({
   key: uid(), id: null, airline: 'KE', flightNo: '', date: '', dep: '', arr: '', arrOffset: 0, from: '', to: '', cls: '',
   cabin: 'Y', rate: 100, baseMiles: null, baseSource: null, baseTouched: false, milesOverride: null, credit: 'KE', creditTouched: false,
-  price: null, note: '', showBase: false, showOverride: false, ...o,
+  price: null, note: '', aircraft: '', reg: '', showBase: false, showOverride: false, ...o,
 });
 
 // 자동 계산: 구간 마일, 실적 구분, 적립률
@@ -82,6 +83,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
       from: s.from, to: s.to, cls: (s.cls || '').toUpperCase(), cabin: s.cabin || 'Y', rate: s.rate == null ? 100 : +s.rate, baseMiles: s.baseMiles == null ? 0 : +s.baseMiles,
       baseSource: s.baseSource || 'manual', milesOverride: s.showOverride && s.milesOverride != null ? +s.milesOverride : null, credit: s.credit,
       price: priceMode === 'each' ? s.price : null, note: s.note || '',
+      aircraft: normAircraft(s.aircraft), reg: String(s.reg || '').trim().toUpperCase(),
     })),
     [segs, priceMode],
   );
@@ -118,6 +120,7 @@ export default function FlightForm({ initial, today, aiOk, myFlights = [], onSav
           credit: ['KE', 'ST', 'OT', 'NONE'].includes(x.credit) ? x.credit : defaultCredit(code),
           creditTouched: ['KE', 'ST', 'OT', 'NONE'].includes(x.credit) && x.credit !== defaultCredit(code),
           note: x.note || prev?.note || '',
+          aircraft: normAircraft(x.aircraft || prev?.aircraft || ''),
         });
         const b = baseMilesFor(code, s.from, s.to);
         if (b.miles != null) s = { ...s, baseMiles: b.miles, baseSource: b.source, baseTouched: false };
@@ -328,6 +331,17 @@ function SegCard({ s, i, n, err, showPrice, myFlights, onChange, onRemove }) {
           </select>
         </label>
       </div>
+      <div className="row2" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)' }}>
+        <label className="field">
+          <span>기종 <span className="faint">(선택)</span></span>
+          <input className="input" list="aircraft-list" value={s.aircraft || ''} placeholder="예: B787-10" autoCapitalize="characters" onChange={(ev) => onChange({ aircraft: ev.target.value })} onBlur={() => s.aircraft && onChange({ aircraft: normAircraft(s.aircraft) })} />
+        </label>
+        <label className="field">
+          <span>기체 번호 <span className="faint">(선택)</span></span>
+          <input className="input num" value={s.reg || ''} placeholder="예: HL8082" autoCapitalize="characters" onChange={(ev) => onChange({ reg: ev.target.value.toUpperCase().replace(/\s/g, '') })} />
+        </label>
+      </div>
+      <datalist id="aircraft-list">{AIRCRAFT_NAMES.map((n) => <option key={n} value={n} />)}</datalist>
       <div className="field">
         <span>실적 구분</span>
         <Seg small light options={Object.entries(CREDIT).map(([k, v]) => [k, v.short])} value={s.credit} onChange={(v) => onChange({ credit: v, creditTouched: true })} />

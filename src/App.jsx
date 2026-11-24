@@ -7,6 +7,7 @@ import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
 import ImportFlighty from './ImportFlighty.jsx';
 import { FriendsView, FriendView } from './Friends.jsx';
+import { AircraftView } from './Aircraft.jsx';
 import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
 
 // 초대 링크(?f=토큰)로 들어오면 로그인 전까지 기억해 두고 주소에서는 지움
@@ -251,15 +252,17 @@ export default function App() {
       setToast(null);
     });
   };
-  const importFlights = (fl) => {
+  const importFlights = (fl, patches = []) => {
+    const pm = new Map(patches.map((p) => [p.id, p]));
     setState((s) => {
       const trips2 = { ...s.trips };
       for (const f of fl) trips2[f.tripId] = { id: f.tripId, kind: 'oneway', priceMode: 'each', price: null };
-      return { ...s, flights: [...s.flights, ...fl], trips: trips2 };
+      const olds = s.flights.map((f) => (pm.has(f.id) ? { ...f, aircraft: pm.get(f.id).aircraft || f.aircraft || '', reg: pm.get(f.id).reg || f.reg || '' } : f));
+      return { ...s, flights: [...olds, ...fl], trips: trips2 };
     });
     setStack(null);
     setTab('flights');
-    say(`${fl.length}편을 가져왔어요 · ${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일`);
+    say([fl.length ? `${fl.length}편을 가져왔어요 · ${fmtNum(fl.reduce((a, f) => a + earnedMiles(f), 0))}마일` : '', patches.length ? `기종 ${patches.length}편 채움` : ''].filter(Boolean).join(' · '));
   };
   const deleteTrip = (tripId) => {
     setState((s) => {
@@ -390,6 +393,8 @@ export default function App() {
   } else if (view?.name === 'friend') {
     const fr = friends.find((x) => x.uid === view.uid);
     content = fr ? <FriendView fr={fr} ctx={ctx} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
+  } else if (view?.name === 'aircraft') {
+    content = <AircraftView ctx={ctx} onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'aircraft' }); }} onClose={() => setStack(null)} />;
   } else if (view?.name === 'import') {
     content = <ImportFlighty ctx={ctx} onImport={importFlights} onClose={() => setStack(null)} onSettings={() => setStack({ name: 'settings' })} />;
   } else if (view?.name === 'form') {
@@ -409,7 +414,7 @@ export default function App() {
   } else if (view?.name === 'detail') {
     const f = flights.find((x) => x.id === view.id);
     content = f ? (
-      <DetailView key={f.id} f={f} ctx={ctx} mobile={mobile} onClose={close} onEdit={() => editTrip(f)} onDelete={deleteFlight} onOpen={open} />
+      <DetailView key={f.id} f={f} ctx={ctx} mobile={mobile} onClose={view.back ? () => setStack({ name: view.back }) : close} onEdit={() => editTrip(f)} onDelete={deleteFlight} onOpen={open} />
     ) : (
       <div className="empty"><p>항공편을 찾을 수 없어요.</p><button className="btn" onClick={close}>돌아가기</button></div>
     );
@@ -427,6 +432,7 @@ export default function App() {
         onAdd={addNew}
         onSample={loadSample}
         onFlighty={() => setStack({ name: 'import' })}
+        onAircraft={() => setStack({ name: 'aircraft' })}
         onDelete={swipeDelete}
         onTier={() => setTab('tier')}
         banner={banner}

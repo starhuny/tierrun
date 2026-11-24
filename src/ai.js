@@ -32,6 +32,7 @@ const SCHEMA = `{
     "dep": "HH:MM" | null, "arr": "HH:MM" | null, "arrOffset": 0,
     "bookingClass": "Q" | null,
     "cabin": "Y" | "W" | "C" | "F" | null,   // 일반석/프리미엄/비즈니스/일등석
+    "aircraft": "B787-10" | null,       // 기종 (예약 확인서·일정에 있을 때만)
     "earnRate": number | null,          // 스카이패스 적립률(%)
     "distanceMiles": number | null,     // 스카이패스 구간 마일(편도, 100% 기준) 추정
     "credit": "KE" | "ST" | "OT" | "NONE",

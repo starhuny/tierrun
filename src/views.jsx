@@ -8,6 +8,7 @@ import {
 import { Icon, AirlineMark, Bar, Ring, Avatar } from './ui.jsx';
 import Globe from './Globe.jsx';
 import { FriendsSection, FriendFace } from './Friends.jsx';
+import { AircraftStrip } from './Aircraft.jsx';
 import { friendNames } from './social.js';
 
 export const city = (c) => findAirport(c)?.city || c || '?';
@@ -51,6 +52,7 @@ export function FlightRow({ f, ctx, selected, onClick }) {
           {p > 0 && <span className="chip"><b>+{p}</b>P</span>}
           {c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
           <CabinBadge f={f} />
+          {f.aircraft && <span className="badge gray">{f.aircraft}</span>}
           {(f.credit === 'ST' || f.credit === 'OT') && <span className={`badge cr-${f.credit}`}>{CREDIT[f.credit].short}</span>}
           {excluded && f.credit !== 'NONE' && <span className="badge gray">입력한 실적에 포함</span>}
           {ctx.together?.get(f.id) && <span className="badge together"><Icon name="user" size={12} />{friendNames(ctx.together.get(f.id))} 같이 가요</span>}
@@ -239,7 +241,7 @@ export function TierStrip({ goals, profile, onClick }) {
 }
 
 /* ───────── 항공편 목록 ───────── */
-export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onTier, head, banner }) {
+export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, onFlighty, onDelete, onTier, onAircraft, head, banner }) {
   const { flights, today } = ctx;
   const [showPast, setShowPast] = useState(false);
   const [openId, setOpenId] = useState(null);
@@ -252,6 +254,7 @@ export function FlightsView({ ctx, goals, selectedId, onOpen, onAdd, onSample, o
       {head}
       {banner}
       <TierStrip goals={goals} profile={ctx.profile} onClick={onTier} />
+      {flights.length > 0 && onAircraft && <AircraftStrip flights={flights} today={today} onClick={onAircraft} />}
       {!flights.length ? (
         <div className="empty fade-in">
           <svg width="150" height="70" viewBox="0 0 150 70" aria-hidden="true">
@@ -313,6 +316,7 @@ export function DetailView({ f, ctx, mobile, onClose, onEdit, onDelete, onOpen }
         {d < 0 ? <span className="badge good"><Icon name="check" size={13} stroke={3} />탑승 완료 · 확정 실적</span> : d === 0 ? <span className="badge">오늘 출발</span> : <span className="badge">D-{d} · 예정 실적</span>}
         <CabinBadge f={f} />
         <span className="badge gray">{AIRLINE[f.airline]?.name || f.airline}</span>
+        {(f.aircraft || f.reg) && <span className="badge gray"><Icon name="plane" size={12} />{[f.aircraft, f.reg].filter(Boolean).join(' · ')}</span>}
         {isDomesticKR(f.from, f.to) ? <span className="badge gray">국내선</span> : <span className="badge gray">국제선</span>}
       </div>
       {mobile && (

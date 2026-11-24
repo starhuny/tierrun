@@ -1,6 +1,7 @@
 // Flighty 앱에서 내보낸 CSV(FlightyExport-YYYY-MM-DD.csv) 읽기
 // 대한항공·스카이팀·아시아나 항공편만 골라 티어런 항공편으로 바꿈 (적립률은 모두 100%)
 import { baseMilesFor, defaultCredit, uid } from './core.js';
+import { normAircraft } from './aircraft.js';
 
 // Flighty는 항공사를 ICAO 3자리로 적음 → IATA 2자리
 export const ICAO_TO_IATA = {
@@ -54,8 +55,9 @@ export function readFlighty(text, existing = []) {
   const C = {
     date: col('Date'), airline: col('Airline'), no: col('Flight'), from: col('From'), to: col('To'), canceled: col('Canceled'),
     dep: col('Gate Departure (Scheduled)'), arr: col('Gate Arrival (Scheduled)'), cabin: col('Cabin Class'), seat: col('Seat'),
+    aircraft: col('Aircraft Type Name'), reg: col('Tail Number'),
   };
-  const have = new Set(existing.map((f) => `${String(f.airline).toUpperCase()}|${String(f.flightNo).replace(/^0+/, '')}|${f.date}`));
+  const have = new Map(existing.map((f) => [`${String(f.airline).toUpperCase()}|${String(f.flightNo).replace(/^0+/, '')}|${f.date}`, f]));
   const out = [];
   let other = 0, canceled = 0;
   for (const r of rows.slice(1)) {
@@ -77,9 +79,13 @@ export function readFlighty(text, existing = []) {
       from, to, cls: '', cabin: CABIN_MAP[(r[C.cabin] || '').trim()] || 'Y', rate: 100,
       baseMiles: b.miles ?? null, baseSource: b.source ?? null, milesOverride: null,
       credit: defaultCredit(code), price: null, note: '', importedFrom: 'flighty',
+      aircraft: C.aircraft >= 0 ? normAircraft(r[C.aircraft]) : '', reg: C.reg >= 0 ? String(r[C.reg] || '').trim().toUpperCase() : '',
     };
     const group = code === 'KE' ? 'KE' : code === 'OZ' ? 'OZ' : 'ST';
-    out.push({ key: id, group, flight, dup: have.has(`${code}|${flightNo}|${date}`) });
+    const old = have.get(`${code}|${flightNo}|${date}`);
+    // 이미 있는 항공편인데 기종이 비어 있으면 채워 줄 수 있게
+    const patch = old && ((!old.aircraft && flight.aircraft) || (!old.reg && flight.reg)) ? { id: old.id, aircraft: old.aircraft || flight.aircraft, reg: old.reg || flight.reg } : null;
+    out.push({ key: id, group, flight, dup: !!old, patch });
   }
   out.sort((x, y) => (x.flight.date + x.flight.dep).localeCompare(y.flight.date + y.flight.dep));
   return { rows: out, total: rows.length - 1, skipped: { other, canceled } };

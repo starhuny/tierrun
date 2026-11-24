@@ -36,7 +36,7 @@ export function buildPublic({ profile, user, flights, goals, today }) {
     upcoming: sortFlights(flights)
       .filter((f) => f.date >= today)
       .slice(0, 40)
-      .map((f) => ({ airline: f.airline, flightNo: f.flightNo, date: f.date, from: f.from, to: f.to, dep: f.dep || '', arr: f.arr || '', arrOffset: +f.arrOffset || 0, cabin: cabinOf(f) })),
+      .map((f) => ({ airline: f.airline, flightNo: f.flightNo, date: f.date, from: f.from, to: f.to, dep: f.dep || '', arr: f.arr || '', arrOffset: +f.arrOffset || 0, cabin: cabinOf(f), aircraft: f.aircraft || '' })),
   };
 }
 
