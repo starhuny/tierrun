@@ -135,7 +135,7 @@ function HotelPicker({ s, set, onTypeName }) {
               </p>
             )}
           </div>
-          <div className="hlist-f">OpenStreetMap 기준이라 새로 연 호텔은 빠져 있을 수 있어요.</div>
+          <div className="hlist-f">아코르 사이트 호텔 목록 기준(공개 데이터, 매주 갱신)이에요. 없으면 이름을 직접 넣어 주세요.</div>
         </div>
       )}
     </div>

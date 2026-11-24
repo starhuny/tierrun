@@ -1,5 +1,5 @@
-// 도시 주변 아코르 호텔 목록 (/api/hotels · OpenStreetMap) — 같은 도시는 기기에 7일 보관
-const KEY = 'tierrun:hotels2';
+// 도시 주변 아코르 호텔 목록 (/api/hotels · All The Places 공개 데이터) — 같은 도시는 기기에 7일 보관
+const KEY = 'tierrun:hotels3';
 const TTL = 7 * 86400000;
 const mem = new Map();
 
