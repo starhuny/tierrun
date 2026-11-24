@@ -65,6 +65,7 @@ export function FlightRow({ f, ctx, selected, onClick, pick }) {
           ) : f.credit === 'NONE' ? <span className="badge gray">스카이패스 미반영</span> : <span className="chip"><b>+{fmtNum(e)}</b>마일</span>}
           {p > 0 && <span className="chip"><b>+{p}</b>P</span>}
           {c != null && e > 0 && <span className="chip"><b>{fmtWon(c / e)}</b>/마일</span>}
+          {!(+f.baseMiles > 0) && f.milesOverride == null && <span className="badge warn">거리 정보 없음</span>}
           <CabinBadge f={f} />
           {f.aircraft && <span className="badge gray">{f.aircraft}</span>}
           {(f.credit === 'ST' || f.credit === 'OT') && <span className={`badge cr-${f.credit}`}>{CREDIT[f.credit].short}</span>}

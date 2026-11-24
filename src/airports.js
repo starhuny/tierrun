@@ -1,3 +1,5 @@
+import { WORLD_RAW } from './airports-world.js';
+
 // 공항 데이터: 코드|도시(한글)|공항명(한글)|도시(영문)|국가|위도|경도
 // 좌표는 대권거리(추정 마일) 계산과 지도 표시에 사용됩니다.
 const RAW = `
@@ -226,10 +228,12 @@ JNB|요하네스버그|탐보국제공항|Johannesburg|ZA|-26.1392|28.2460
 CMN|카사블랑카|무함마드5세국제공항|Casablanca|MA|33.3675|-7.5899
 `;
 
-export const AIRPORTS = RAW.trim().split('\n').map((line) => {
+const parse = (raw) => raw.trim().split('\n').map((line) => {
   const [code, city, name, en, country, lat, lon] = line.split('|');
   return { code, city, name, en, country, lat: +lat, lon: +lon };
 });
+// 자주 쓰는 공항(한글 공항명) + 나머지 세계 공항
+export const AIRPORTS = [...parse(RAW), ...parse(WORLD_RAW)];
 
 export const AIRPORT = Object.fromEntries(AIRPORTS.map((a) => [a.code, a]));
 

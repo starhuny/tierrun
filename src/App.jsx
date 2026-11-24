@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initStore, EMPTY_STATE, useLocalGuest } from './store.js';
 import { aiAvailable } from './ai.js';
-import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum, uid, flightCost, defaultCredit } from './core.js';
+import { computeGoals, costStats, todayISO, sortFlights, earnedMiles, fmtNum, uid, flightCost, defaultCredit, baseMilesFor } from './core.js';
 import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
@@ -88,6 +88,11 @@ export default function App() {
       const s = { ...s0, flights: (s0.flights || []).map((f) => {
         let g = f.airline === 'OZ' && f.credit === 'OT' ? { ...f, credit: 'KE' } : f;
         if (g.aircraft && normAircraft(g.aircraft) !== g.aircraft) g = { ...g, aircraft: normAircraft(g.aircraft) };
+        // 예전에 공항 목록에 없어 거리가 0으로 저장된 항공편: 지금 목록으로 다시 계산
+        if (!(+g.baseMiles > 0) && g.from && g.to) {
+          const b = baseMilesFor(g.airline, g.from, g.to);
+          if (b.miles > 0) g = { ...g, baseMiles: b.miles, baseSource: b.source };
+        }
         return g;
       }) };
       setState(s);
