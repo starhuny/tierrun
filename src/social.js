@@ -57,10 +57,12 @@ export function buildPublic({ profile, user, flights, goals, today }) {
         }
       : null,
     // 지갑의 다른 티어 (지금은 알래스카): 등급과 올해 상태포인트 진행률만
+    // 본인이 정한 지갑 순서 (친구 화면도 이 순서로 보여줌)
+    order: walletOf(profile).map((w) => w.program),
     wallet: walletOf(profile).filter((w) => w.program !== 'KE').map((w) => {
       if (w.program !== 'AS') return { program: w.program };
       const x = asSummary(w, flights, today);
-      return { program: 'AS', tier: x.held.id, year: x.year, sp: x.conf, all: x.all, next: x.next?.id || null, nextSp: x.next?.sp || null };
+      return { program: 'AS', tier: x.held.id, year: x.year, sp: x.conf, all: x.all, next: x.next?.id || null, nextSp: x.next?.sp || null, goal: x.goal || '' };
     }),
     // 많이 탄 기종 순위(탑승 완료 기준, 횟수만)
     aircraft: aircraftTop(flights, today, 3),

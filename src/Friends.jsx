@@ -6,6 +6,7 @@ import { Icon, AirlineMark, Bar } from './ui.jsx';
 import { inviteLink, flightKey } from './social.js';
 import { aircraftTop } from './aircraft.js';
 import { AS_TIER } from './alaska.js';
+import { CardFace } from './Wallet.jsx';
 
 const city = (c) => findAirport(c)?.city || c || '?';
 
@@ -19,6 +20,31 @@ export function FriendFace({ fr, size = 40 }) {
 }
 
 const pct = (x) => `${Math.floor((x || 0) * 1000) / 10}%`;
+
+// 친구가 정한 지갑 순서 (예전 버전 친구는 스카이패스 먼저)
+const orderOf = (fr) => {
+  const o = Array.isArray(fr.order) ? fr.order : [...(fr.ke === false ? [] : ['KE']), ...(fr.wallet || []).map((w) => w.program)];
+  return o.filter((p) => p === 'KE' || (p === 'AS' && asOf(fr)));
+};
+const asOf = (fr) => (fr.wallet || []).find((w) => w.program === 'AS' && AS_TIER[w.tier]) || null;
+// 알래스카 진행률 요약
+function asInfo(w) {
+  const at = AS_TIER[w.tier];
+  const nt = w.next ? AS_TIER[w.next] : null;
+  const tgt = w.nextSp || 1;
+  const conf = nt ? Math.min(1, w.sp / tgt) : 1;
+  const all = nt ? Math.min(1, w.all / tgt) : 1;
+  const label = nt ? w.goal || (nt.sp <= at.sp ? `${nt.name} 유지` : nt.name) : '';
+  return { at, nt, conf, all, label, rem: nt ? Math.max(0, w.nextSp - w.sp) : 0 };
+}
+function KeChip({ fr }) {
+  const t = TIER[fr.tier] || TIER.SKYPASS;
+  return <span className="tier-chip" style={{ background: t.bg, color: t.ink }}>{t.name}</span>;
+}
+function AsChip({ w }) {
+  const at = AS_TIER[w.tier];
+  return <span className="tier-chip" style={{ background: at.bg, color: at.ink }}>알래스카 {at.name}</span>;
+}
 const nextUp = (fr, today) => (fr.upcoming || []).find((u) => u.date >= today);
 
 // 친구 한 줄: 사진·이름, 등급 칩, 다음 등급 진행률, 다음 항공편
@@ -35,14 +61,19 @@ export function FriendRow({ fr, ctx, onClick, right }) {
         <span className="fr-mid">
           <span className="fr-top">
             <b>{fr.name || '이름 없음'}</b>
-            {fr.ke !== false && <span className="tier-chip" style={{ background: t.bg, color: t.ink }}>{t.name}</span>}
-            {(fr.wallet || []).filter((w) => w.program === 'AS' && AS_TIER[w.tier]).map((w) => (
-              <span key="AS" className="tier-chip" style={{ background: AS_TIER[w.tier].bg, color: AS_TIER[w.tier].ink }}>알래스카 {AS_TIER[w.tier].name}</span>
-            ))}
+            {orderOf(fr).map((p) => (p === 'KE' ? <KeChip key="KE" fr={fr} /> : <AsChip key="AS" w={asOf(fr)} />))}
           </span>
           {fr.missing ? (
             <span className="fr-sub">아직 티어런 정보가 올라오지 않았어요</span>
-          ) : fr.ke === false ? null : g ? (
+          ) : orderOf(fr)[0] === 'AS' ? (() => {
+            const x = asInfo(asOf(fr));
+            return x.nt ? (
+              <>
+                <span className="fr-sub num">알래스카 {x.label}까지 <b>{pct(x.conf)}</b> · {fmtNum(x.rem)} SP 남음</span>
+                <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} thin />
+              </>
+            ) : <span className="fr-sub">알래스카 최고 등급 달성</span>;
+          })() : !orderOf(fr).includes('KE') ? null : g ? (
             <>
               <span className="fr-sub num">{g.title} <b>{pct(g.conf)}</b>{g.remMi ? ` · ${fmtNum(g.remMi)}마일 남음` : ''}</span>
               <Bar conf={g.conf} plan={Math.max(0, g.all - g.conf)} thin done={g.done} />
@@ -211,45 +242,65 @@ export function FriendView({ fr, ctx, onRemove, onBack }) {
         <p className="muted" style={{ margin: '12px 20px' }}>친구가 아직 새 버전의 티어런을 열지 않아 정보가 없어요. 친구가 앱을 한 번 열면 보여요.</p>
       ) : (
         <>
-          {fr.ke !== false && (<>
-          <div className="tcard" style={{ background: t.bg, color: t.ink, marginTop: 10 }}>
-            <div><div className="en">{t.en}</div><div className="ko">{t.name}</div></div>
-            <div className="foot num">
-              <span>{fr.name}</span>
-              <span>{fr.periodEnd ? `${fmtDot(fr.periodEnd)}까지${dleft != null && dleft >= 0 ? ` · D-${dleft}` : ''}` : fr.tier === 'MCP' || fr.tier === 'MM' ? '평생 등급' : ''}</span>
-            </div>
-          </div>
-          {g ? (
-            <div className="pad" style={{ marginTop: 12 }}>
-              <div className="card">
-                <div className="card-h"><span>{g.title}</span><b className="num" style={{ color: 'var(--ink)', fontSize: 18 }}>{pct(g.conf)}</b></div>
-                <Bar conf={g.conf} plan={Math.max(0, g.all - g.conf)} done={g.done} />
-                <div className="help num" style={{ marginTop: 8 }}>
-                  {g.done ? '달성했어요' : `${fmtNum(g.remMi)}마일 남음`}{!g.done && g.all > g.conf ? ` · 예정 항공편 포함 ${pct(g.all)}` : ''}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="muted" style={{ margin: '12px 20px' }}>최고 등급이라 다음 목표가 없어요.</p>
-          )}
-          </>)}
-          {(fr.wallet || []).filter((w) => w.program === 'AS' && AS_TIER[w.tier]).map((w) => {
-            const at = AS_TIER[w.tier];
-            const nt = w.next ? AS_TIER[w.next] : null;
-            const tgt = w.nextSp || 1;
-            return (
-              <div key="AS" className="pad" style={{ marginTop: 10 }}>
-                <div className="card">
-                  <div className="card-h">
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="AS" size="xs" />알래스카 Atmos</span>
-                    <span className="tier-chip" style={{ background: at.bg, color: at.ink }}>{at.name}{at.ow ? ` · ${at.ow}` : ''}</span>
+          {orderOf(fr).map((p, i) => (p === 'KE' ? (
+            <Fragment key="KE">
+              {i === 0 && (
+                <div className="tcard" style={{ background: t.bg, color: t.ink, marginTop: 10 }}>
+                  <div><div className="en">{t.en}</div><div className="ko">{t.name}</div></div>
+                  <div className="foot num">
+                    <span>{fr.name}</span>
+                    <span>{fr.periodEnd ? `${fmtDot(fr.periodEnd)}까지${dleft != null && dleft >= 0 ? ` · D-${dleft}` : ''}` : fr.tier === 'MCP' || fr.tier === 'MM' ? '평생 등급' : ''}</span>
                   </div>
-                  <Bar conf={nt ? Math.min(1, w.sp / tgt) : 1} plan={nt ? Math.min(1, w.all / tgt) - Math.min(1, w.sp / tgt) : 0} done={!nt} />
-                  <div className="help num" style={{ marginTop: 8 }}>{w.year}년 {fmtNum(w.sp)} SP{nt ? ` · ${nt.name}까지 ${fmtNum(Math.max(0, w.nextSp - w.sp))} SP 남음` : ' · 최고 등급 달성'}{w.all > w.sp ? ` · 예정 포함 ${fmtNum(w.all)} SP` : ''}</div>
+                </div>
+              )}
+              <div className="pad" style={{ marginTop: i === 0 ? 12 : 10 }}>
+                <div className="card">
+                  {i > 0 && (
+                    <div className="card-h">
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="KE" size="xs" />대한항공 스카이패스</span>
+                      <KeChip fr={fr} />
+                    </div>
+                  )}
+                  {g ? (
+                    <>
+                      <div className="card-h"><span>{g.title}</span><b className="num" style={{ color: 'var(--ink)', fontSize: 18 }}>{pct(g.conf)}</b></div>
+                      <Bar conf={g.conf} plan={Math.max(0, g.all - g.conf)} done={g.done} />
+                      <div className="help num" style={{ marginTop: 8 }}>
+                        {g.done ? '달성했어요' : `${fmtNum(g.remMi)}마일 남음`}{!g.done && g.all > g.conf ? ` · 예정 항공편 포함 ${pct(g.all)}` : ''}
+                      </div>
+                    </>
+                  ) : <p className="muted" style={{ margin: 0, fontSize: 14 }}>최고 등급이라 다음 목표가 없어요.</p>}
                 </div>
               </div>
+            </Fragment>
+          ) : (() => {
+            const w = asOf(fr);
+            const x = asInfo(w);
+            return (
+              <Fragment key="AS">
+                {i === 0 && (
+                  <div className="pad" style={{ marginTop: 10 }}>
+                    <CardFace
+                      bg={x.at.bg} ink={x.at.ink} en="ALASKA ATMOS REWARDS" title={x.at.name} gem={x.at.gem} airline="AS"
+                      sub={x.at.ow ? `원월드 ${x.at.ow}` : '원월드'}
+                      foot={<div className="wline"><span>{fr.name}</span><span>{w.year} · {fmtNum(w.sp)} SP</span></div>}
+                      conf={x.conf} plan={Math.max(0, x.all - x.conf)}
+                    />
+                  </div>
+                )}
+                <div className="pad" style={{ marginTop: i === 0 ? 12 : 10 }}>
+                  <div className="card">
+                    <div className="card-h">
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AirlineMark code="AS" size="xs" />{i === 0 ? (x.nt ? `${x.label}까지` : '알래스카 Atmos') : '알래스카 Atmos'}</span>
+                      {i === 0 ? <b className="num" style={{ color: 'var(--ink)', fontSize: 18 }}>{x.nt ? pct(x.conf) : '달성'}</b> : <AsChip w={w} />}
+                    </div>
+                    <Bar conf={x.conf} plan={Math.max(0, x.all - x.conf)} done={!x.nt} />
+                    <div className="help num" style={{ marginTop: 8 }}>{w.year}년 {fmtNum(w.sp)} SP{x.nt ? ` · ${x.label}까지 ${fmtNum(x.rem)} SP 남음` : ' · 최고 등급 달성'}{w.all > w.sp ? ` · 예정 포함 ${fmtNum(w.all)} SP` : ''}</div>
+                  </div>
+                </div>
+              </Fragment>
             );
-          })}
+          })()))}
           <FlightCompare fr={fr} ctx={ctx} />
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{up.length}편</span></div>
           {up.length === 0 && <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>예정된 항공편이 없어요.</p>}

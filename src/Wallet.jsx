@@ -14,7 +14,7 @@ const thisYear = (today) => +today.slice(0, 4);
 const man = (n) => (n % 10000 === 0 ? `${n / 10000}만` : `${(n / 10000).toFixed(1).replace(/\.0$/, '')}만`);
 
 /* ───────── 카드 모양 ───────── */
-function CardFace({ bg, ink, en, title, sub, gem, airline, foot, conf, plan, compact }) {
+export function CardFace({ bg, ink, en, title, sub, gem, airline, foot, conf, plan, compact }) {
   return (
     <div className={`wface ${compact ? 'compact' : ''}`} style={{ background: bg, color: ink }}>
       <div className="wtop">
