@@ -751,3 +751,9 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 34px; 
 .bkinds button small { color: var(--ink-2); font-weight: 600; }
 .bkinds button.on { background: var(--navy-btn); color: var(--navy-btn-ink); border-color: transparent; }
 .bkinds button.on small { color: inherit; opacity: .75; }
+
+/* 친구 지도 크게 보기 */
+.mini-map.tap { display: block; width: calc(100% - 32px); padding: 0; border: 0; cursor: pointer; }
+.mini-hint { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--map-pill); color: var(--map-pill-ink); box-shadow: var(--shadow-sm); }
+.map-who { display: flex; align-items: center; gap: 8px; }
+.map-back { width: 28px; height: 28px; margin: -4px 0 -4px -8px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.18); color: inherit; border: 0; cursor: pointer; }

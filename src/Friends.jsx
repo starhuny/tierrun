@@ -260,7 +260,31 @@ export function FriendsView({ ctx, social, err, invite, onOpen, onRemove, onRese
 }
 
 // 친구 한 명: 등급 카드, 진행률, 다가오는 항공편
-export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
+// 친구의 다가오는 항공편 한 줄
+export function FriendFlightRow({ u, today, same }) {
+  const d = daysBetween(today, u.date);
+  return (
+    <div className={`frow ffr ${same ? 'sel' : ''}`}>
+      {d === 0 ? <div className="dday today"><b>오늘</b></div> : <div className="dday"><b className="num">{d}</b><small>일 후</small></div>}
+      <div>
+        <div className="fmeta"><AirlineMark code={u.airline} size="sm" /><span>{u.airline} {u.flightNo}</span><span className="d">{fmtDate(u.date)}</span></div>
+        <div className="ftitle">{city(u.from)} → {city(u.to)}</div>
+        <div className="ftimes num">
+          <span>{u.from} {u.dep && <b>{u.dep}</b>}</span>
+          <span>{u.to} {u.arr && <b>{u.arr}{+u.arrOffset ? <sup> +{u.arrOffset}</sup> : null}</b>}</span>
+        </div>
+        <div className="fchips">
+          <span className={`badge cabin-${u.cabin || 'Y'}`}>{CABIN[u.cabin]?.name || '일반석'}</span>
+          {u.aircraft && <span className="badge gray">{u.aircraft}</span>}
+          {same && <span className="badge together"><Icon name="user" size={12} />나도 탑승 · 같이 가요</span>}
+          {!AIRLINE[u.airline] && <span className="badge gray">{u.airline}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FriendView({ fr, ctx, mobile, onRemove, onBack, onMap }) {
   const [ask, setAsk] = useState(false);
   const t = TIER[fr.tier] || TIER.SKYPASS;
   const g = fr.goal;
@@ -280,9 +304,10 @@ export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
       ) : (
         <>
           {mobile && up.length > 0 && (
-            <div className="mini-map">
+            <button type="button" className="mini-map tap" onClick={onMap} aria-label="친구 지도 크게 보기">
               <Globe flights={up.map((u, i) => ({ ...u, id: `fr-${i}` }))} today={today} interactive={false} fitKey={fr.uid} />
-            </div>
+              <span className="mini-hint"><Icon name="fit" size={14} />눌러서 크게 보기</span>
+            </button>
           )}
           {orderOf(fr).map((p, i) => (p === 'KE' ? (
             <Fragment key="KE">
@@ -373,29 +398,7 @@ export function FriendView({ fr, ctx, mobile, onRemove, onBack }) {
           <FlightCompare fr={fr} ctx={ctx} />
           <div className="section-h"><span>다가오는 항공편</span><span className="faint num">{up.length}편</span></div>
           {up.length === 0 && <p className="muted" style={{ margin: '0 20px', fontSize: 14 }}>예정된 항공편이 없어요.</p>}
-          {up.map((u, i) => {
-            const d = daysBetween(today, u.date);
-            const same = mineMap.get(flightKey(u));
-            return (
-              <div key={i} className={`frow ffr ${same ? 'sel' : ''}`}>
-                {d === 0 ? <div className="dday today"><b>오늘</b></div> : <div className="dday"><b className="num">{d}</b><small>일 후</small></div>}
-                <div>
-                  <div className="fmeta"><AirlineMark code={u.airline} size="sm" /><span>{u.airline} {u.flightNo}</span><span className="d">{fmtDate(u.date)}</span></div>
-                  <div className="ftitle">{city(u.from)} → {city(u.to)}</div>
-                  <div className="ftimes num">
-                    <span>{u.from} {u.dep && <b>{u.dep}</b>}</span>
-                    <span>{u.to} {u.arr && <b>{u.arr}{+u.arrOffset ? <sup> +{u.arrOffset}</sup> : null}</b>}</span>
-                  </div>
-                  <div className="fchips">
-                    <span className={`badge cabin-${u.cabin || 'Y'}`}>{CABIN[u.cabin]?.name || '일반석'}</span>
-                    {u.aircraft && <span className="badge gray">{u.aircraft}</span>}
-                    {same && <span className="badge together"><Icon name="user" size={12} />나도 탑승 · 같이 가요</span>}
-                    {!AIRLINE[u.airline] && <span className="badge gray">{u.airline}</span>}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {up.map((u, i) => <FriendFlightRow key={i} u={u} today={today} same={!!mineMap.get(flightKey(u))} />)}
           {fr.updatedAt && <p className="help" style={{ margin: '12px 20px 0' }}>{(() => { const d = new Date(fr.updatedAt); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })()}에 업데이트된 정보예요.</p>}
         </>
       )}

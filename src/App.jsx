@@ -6,10 +6,10 @@ import { sampleState } from './sample.js';
 import Globe from './Globe.jsx';
 import FlightForm from './FlightForm.jsx';
 import ImportFlighty from './ImportFlighty.jsx';
-import { FriendsView, FriendView, FriendsSection } from './Friends.jsx';
+import { FriendsView, FriendView, FriendsSection, FriendFlightRow } from './Friends.jsx';
 import { AircraftView } from './Aircraft.jsx';
 import { normAircraft } from './aircraft.js';
-import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './social.js';
+import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap, flightKey } from './social.js';
 import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './Wallet.jsx';
 import { AccorAddView, AccorView, StayForm } from './Accor.jsx';
 import { dailyFx, cachedFx, effectiveEur } from './fx.js';
@@ -69,6 +69,8 @@ export default function App() {
   const [tab, setTab] = useState('flights');
   const [stack, setStack] = useState(null);
   const [sel, setSel] = useState(null);
+  const [frMap, setFrMap] = useState(false);
+  const [frSel, setFrSel] = useState(null);
   const [today, setToday] = useState(todayISO());
   const [aiOk, setAiOk] = useState(false);
   const [toast, setToast] = useState(null);
@@ -475,6 +477,9 @@ export default function App() {
     if (['friend', 'friends', 'wallet', 'tieradd'].includes(stack?.name)) scrollRef.current?.scrollTo?.(0, 0);
   }, [stack?.name, stack?.uid]);
 
+  // 다른 화면으로 가면 친구 전체 지도는 닫음
+  useEffect(() => { setFrMap(false); }, [stack?.name, stack?.uid]);
+
   if (phase === 'boot') return <div className="loading"><span className="spin" />불러오는 중…</div>;
   if (phase === 'error') return <div className="loading"><p>{bootErr}</p></div>;
   if (phase === 'login') {
@@ -645,7 +650,7 @@ export default function App() {
     content = <FriendsView ctx={ctx} social={!!social} err={friendsErr} invite={profile?.invite} onOpen={(uid) => setStack({ name: 'friend', uid })} onRemove={removeFriend} onReset={resetInvite} onRefresh={() => loadFriends(true)} onClose={() => setStack(null)} say={say} />;
   } else if (view?.name === 'friend') {
     const fr = friends.find((x) => x.uid === view.uid);
-    content = fr ? <FriendView fr={fr} ctx={ctx} mobile={mobile} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
+    content = fr ? <FriendView fr={fr} ctx={ctx} mobile={mobile} onMap={() => { setFrSel(null); setFrMap(true); }} onRemove={() => removeFriend(fr.uid)} onBack={() => setStack({ name: 'friends' })} /> : <div className="empty"><p>친구를 찾을 수 없어요.</p><button className="btn" onClick={() => setStack({ name: 'friends' })}>돌아가기</button></div>;
   } else if (view?.name === 'aircraft') {
     content = <AircraftView ctx={ctx} onOpen={(id) => { setSel(id); setStack({ name: 'detail', id, back: 'aircraft' }); }} onClose={() => setStack(null)} onFriend={(uid) => setStack({ name: 'friend', uid })} />;
   } else if (view?.name === 'import') {
@@ -766,7 +771,7 @@ export default function App() {
     </nav>
   );
 
-  const showGlobe = !mobile || onMap;
+  const showGlobe = !mobile || onMap || (mobile && frMap && view?.name === 'friend');
   // 지도도 고른 얼라이언스 칩대로 (호텔 칩이면 숙박 핀만)
   const mapFlights = alliance === 'ALL' ? flights : alliance === 'HOTEL' ? [] : flights.filter((f) => allianceOf(f) === alliance);
   // 모바일 지도 아래 카드: 지도에 그려진 항공편 + 숙박(호텔 핀)을 날짜순으로
@@ -779,23 +784,27 @@ export default function App() {
   // 친구 화면을 보고 있으면 지도에 친구의 다가오는 항공편을 그림
   const frOnMap = view?.name === 'friend' ? friends.find((x) => x.uid === view.uid) : null;
   const frFlights = frOnMap ? (frOnMap.upcoming || []).filter((u) => u.date >= today).map((u, i) => ({ ...u, id: `fr-${i}` })) : null;
+  // 모바일: 친구 화면의 작은 지도를 누르면 전체 화면 지도로
+  const frFull = mobile && frMap && !!frOnMap;
+  const myKeys = frFull ? new Set(flights.filter((f) => f.date >= today).map(flightKey)) : null;
   return (
-    <div className={`app ${mobile ? 'mob' : 'desk'} ${onMap ? 'on-map' : ''}`}>
+    <div className={`app ${mobile ? 'mob' : 'desk'} ${onMap || frFull ? 'on-map' : ''}`}>
       {showGlobe && (
         <div className="map-layer" id="map">
           <Globe
             flights={frFlights || mapFlights}
             pins={frFlights || !(alliance === 'ALL' || alliance === 'HOTEL') ? [] : stays.filter((x) => x.lat != null || x.city).map((x) => (x.lat != null ? { id: `st-${x.id}`, lat: x.lat, lon: x.lon, label: x.cityName, title: x.hotel } : { id: `st-${x.id}`, code: x.city }))}
-            selectedId={frFlights ? null : sel}
-            onSelect={(id) => (frFlights ? null : mobile ? setSel(id) : String(id).startsWith('st-') ? setStack({ name: 'stay', id: id.slice(3) }) : open(id))}
+            selectedId={frFull ? frSel : frFlights ? null : sel}
+            onSelect={(id) => (frFull ? setFrSel(id) : frFlights ? null : mobile ? setSel(id) : String(id).startsWith('st-') ? setStack({ name: 'stay', id: id.slice(3) }) : open(id))}
             insetLeft={mobile ? 0 : panelW + 32}
             insetBottom={mobile ? 170 : 0}
             today={today}
-            fitKey={frOnMap ? `fr:${frOnMap.uid}` : `${alliance}:${mapFlights.length}:${stays.length}`}
+            fitKey={frOnMap ? `fr:${frOnMap.uid}:${frFull ? 1 : 0}` : `${alliance}:${mapFlights.length}:${stays.length}`}
           />
-          {frOnMap && (
+          {frOnMap && (!mobile || frFull) && (
             <div className="map-who" style={{ left: mobile ? 16 : panelW + 48 }}>
-              <b>{frOnMap.name || '친구'}</b>님의 다가오는 항공편 {frFlights.length}편
+              {frFull && <button className="map-back" onClick={() => setFrMap(false)} aria-label="친구 화면으로"><Icon name="back" size={16} /></button>}
+              <span><b>{frOnMap.name || '친구'}</b>님의 다가오는 항공편 {frFlights.length}편</span>
             </div>
           )}
           <div className="map-ctrls" style={mobile ? { top: 'calc(14px + env(safe-area-inset-top))' } : null}>
@@ -810,6 +819,15 @@ export default function App() {
         {!mobile && tabbar}
       </aside>
       {mobile && tabbar}
+      {frFull && frFlights.length > 0 && (
+        <MapStrip
+          items={frFlights.map((u) => ({ id: u.id, render: () => <FriendFlightRow u={u} today={today} same={myKeys.has(flightKey(u))} /> }))}
+          ctx={ctx}
+          selId={frSel || frFlights[0].id}
+          onSel={setFrSel}
+          onOpen={() => {}}
+        />
+      )}
       {onMap && selItem && <MapStrip items={mapItems} ctx={ctx} selId={selItem.id} onSel={setSel} onOpen={(x) => (x.f ? open(x.f.id) : setStack({ name: 'stay', id: x.s.id }))} />}
       {onMap && !flights.length && !stays.length && (
         <div className="map-card" style={{ padding: 16 }}>
