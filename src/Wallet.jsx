@@ -275,7 +275,7 @@ export function TierAddView({ program, entry, ctx, onSave, onDelete, onClose }) 
               </button>
             ))}
           </div>
-          <p className="help" style={{ margin: 0 }}>알래스카에서 고른 방식과 똑같이 골라 주세요. <b>{METHOD_FROM_YEAR}년 1월 1일 출발편부터</b> 이 방식으로 적립 예정을 보여주고, {METHOD_FROM_YEAR - 1}년 탑승분은 거리 기준(1마일 = 1SP)으로 계산해요. 어느 쪽이 유리한지는 카드 상세의 <b>방식 비교</b>에서 볼 수 있어요.</p>
+          <p className="help" style={{ margin: 0 }}>알래스카에서 고른 방식과 똑같이 골라 주세요. <b>{METHOD_FROM_YEAR}년 1월 1일 출발편부터</b> 이 방식으로 적립 예정을 보여주고, {METHOD_FROM_YEAR - 1}년 탑승분은 2026년 기준(구간 거리 1:1, 500마일 미만은 500, 비즈니스 125%)으로 계산해요. 어느 쪽이 유리한지는 카드 상세의 <b>방식 비교</b>에서 볼 수 있어요.</p>
         </div>
         {ow.length > 0 && (
           <label className="checkrow">
@@ -369,7 +369,7 @@ export function AlaskaView({ prog, ctx, head, footer, onEdit, onBack, onSetMetho
         <>
           <div className="goal">
             <h3>{s.next ? `${s.goal}까지` : '최고 등급 달성'}</h3>
-            <div className="scope">{yr}.01.01 ~ {yr}.12.31{dleft >= 0 && yr === yr0 ? ` · D-${dleft}` : ''} · {METHOD[s.method].name}{yr < METHOD_FROM_YEAR ? ' (2026년 고정)' : ''}</div>
+            <div className="scope">{yr}.01.01 ~ {yr}.12.31{dleft >= 0 && yr === yr0 ? ` · D-${dleft}` : ''} · {yr < METHOD_FROM_YEAR ? '2026년 기준 (최소 500 · 비즈니스 125%)' : METHOD[s.method].name}</div>
             <div className="ringwrap">
               <Ring conf={s.next ? Math.min(1, s.conf / s.next.sp) : 1} all={s.next ? Math.min(1, s.all / s.next.sp) : 1}>
                 <b className="num">{fmtNum(s.conf)}</b>
@@ -469,7 +469,7 @@ function CompareTab({ prog, ctx, yr, onSetMethod, onOpen }) {
   const diff = c.best.total - cur.total;
   return (
     <div className="pad" style={{ marginTop: 14 }}>
-      {yr < METHOD_FROM_YEAR && <div className="notice info" style={{ marginBottom: 10 }}>{yr}년 탑승분은 거리 기준으로 고정이에요. 아래는 같은 항공편을 다른 방식으로 계산했을 때의 참고값이에요. {METHOD_FROM_YEAR}년 탭에서 내년 계획을 비교해 보세요.</div>}
+      {yr < METHOD_FROM_YEAR && <div className="notice info" style={{ marginBottom: 10 }}>{yr}년 탑승분은 2026년 기준(최소 500 · 비즈니스 125%)으로 고정이에요. 아래는 같은 항공편을 다른 방식으로 계산했을 때의 참고값이에요. {METHOD_FROM_YEAR}년 탭에서 내년 계획을 비교해 보세요.</div>}
       {!c.list[0].rows.length ? (
         <div className="card"><p className="muted" style={{ margin: 0, fontSize: 14 }}>{yr}년에 알래스카로 적립할 항공편이 아직 없어요. 계획 중인 항공편을 추가하면 세 방식을 바로 비교해 드려요.</p></div>
       ) : (

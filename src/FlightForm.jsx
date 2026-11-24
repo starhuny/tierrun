@@ -460,7 +460,7 @@ function AsFields({ s, prog, onChange, gc }) {
       <div className="miles-out num">
         <div>
           <div className="lab" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {METHOD[m].name}{yr && yr < METHOD_FROM_YEAR ? ` (${yr}년)` : ''} · {r.why}
+            {METHOD[m].name} · {r.why}
           </div>
           <b>{fmtNum(r.sp)}<small style={{ fontSize: 13, marginLeft: 3 }}>SP</small></b>{r.est && <span className="faint" style={{ marginLeft: 8, fontWeight: 700 }}>추정</span>}
         </div>

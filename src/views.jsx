@@ -409,7 +409,7 @@ function AsEarnCard({ f, ctx }) {
   return (
     <>
       <div className="card">
-        <div className="card-h"><span>알래스카 상태포인트</span><span className="badge cr-AS">{METHOD[m].name}{yr < 2027 ? ' (2026년)' : ''}</span></div>
+        <div className="card-h"><span>알래스카 상태포인트</span><span className="badge cr-AS">{METHOD[m].name}</span></div>
         <div className="calc num">
           <span className="muted">계산</span><b style={{ fontSize: 14 }}>{r.why}</b>
           {!isOwn(f.airline) && !f.award && <><span className="muted">좌석 구분 {cat.how === 'table' ? `(${f.cls} 클래스 표)` : cat.how === 'guess' ? '(예약 클래스 미입력)' : ''}</span><b style={{ fontSize: 14 }}>{CAT[cat.cat].name}</b></>}
@@ -422,7 +422,7 @@ function AsEarnCard({ f, ctx }) {
         {!prog && <div className="notice" style={{ marginTop: 10 }}>알래스카 티어가 지갑에 없어요. 지갑에서 추가하면 등급 진행률에 들어가요.</div>}
       </div>
       <div className="card">
-        <div className="card-h"><span>방식별로 계산하면</span>{yr < 2027 && <span className="faint">2026년은 거리 기준</span>}</div>
+        <div className="card-h"><span>방식별로 계산하면</span>{yr < 2027 && <span className="faint">2027년부터 고를 방식</span>}</div>
         <div className="mini3 num">
           {METHODS.map((x) => {
             const v = spFor(f, x.id);

@@ -2,7 +2,7 @@
 // 기준: 비플 '알래스카(원월드) 마일런 상세요강' (2026년 기준, 참고용)
 // - 등급은 달력 연도(1/1~12/31) 상태포인트(SP)로 판정, 최소 탑승 조건 없음
 // - 적립 방식은 1년에 한 번 고르고, 지금 고르면 2027년 1월 1일 출발편부터 적용 (소급 없음)
-// - 2026년 탑승분은 거리 기준(1마일 = 1SP)으로 계산
+// - 2026년 탑승분은 2026년 기준: 구간 거리 1:1, 500마일 미만은 500, 비즈니스·퍼스트는 125%
 import { AIRLINE } from './skypass.js';
 
 export const AS_PROGRAM = 'AS';
@@ -22,7 +22,9 @@ export const METHODS = [
   { id: 'dollar', name: '달러 기준', short: '달러', desc: '알래스카·하와이안은 $1 = 5SP, 타사는 좌석 등급별 적립률 · 마일 항공권은 20포인트당 1SP', good: '비즈니스를 많이 탈 때' },
   { id: 'segment', name: '구간 기준', short: '구간', desc: '편명마다 500SP · 마일 항공권도 500SP', good: '단거리를 자주 탈 때' },
 ];
-export const METHOD = Object.fromEntries(METHODS.map((m) => [m.id, m]));
+// 2026년 탑승분 (적립 방식 선택 전 규칙)
+export const LEGACY = { id: 'legacy', name: '2026년 기준', short: '2026', desc: '구간 거리 1:1 · 500마일 미만은 500 · 비즈니스·퍼스트 125%', min: 500, premium: 125 };
+export const METHOD = Object.fromEntries([...METHODS, LEGACY].map((m) => [m.id, m]));
 
 // 마일스톤 보상 (고르는 개수)
 export const MILESTONES = [
@@ -57,7 +59,7 @@ export const isOwn = (airline) => airline === 'AS' || airline === 'HA';
 export const isOneworld = (airline) => AIRLINE[String(airline || '').toUpperCase()]?.alliance === 'OW';
 
 const year = (d) => +String(d || '').slice(0, 4);
-export const methodFor = (prog, date) => (year(date) >= METHOD_FROM_YEAR ? prog?.method || 'distance' : 'distance');
+export const methodFor = (prog, date) => (year(date) >= METHOD_FROM_YEAR ? prog?.method || 'distance' : 'legacy');
 
 // 좌석 구분 (달러 기준 타사 적립률용): 직접 고른 값 > 예약 클래스 표 > 좌석 등급
 export function asCategory(f) {
@@ -80,6 +82,15 @@ export function asCategory(f) {
 export function spFor(f, method) {
   const dist = Math.max(0, Math.round(+f.baseMiles || 0));
   if (method === 'segment') return { sp: 500, est: false, why: '편명당 500' };
+  if (method === 'legacy') {
+    // 2026년: 최소 500마일 보장 + 비즈니스·퍼스트 125%
+    const base = dist ? Math.max(LEGACY.min, dist) : 0;
+    const prem = !f.award && ['C', 'F'].includes(asCategory(f).cat);
+    const sp = prem ? Math.floor((base * LEGACY.premium) / 100) : base;
+    const parts = [`${base.toLocaleString('ko-KR')}마일${dist && dist < LEGACY.min ? ' (최소 500)' : ''}`];
+    if (prem) parts.push(`× ${LEGACY.premium}% (비즈니스)`);
+    return { sp, est: !dist, why: parts.join(' ') };
+  }
   if (method === 'distance') return { sp: dist, est: !dist, why: `${dist.toLocaleString('ko-KR')}마일 × 1` };
   // 달러 기준
   if (f.award) {
