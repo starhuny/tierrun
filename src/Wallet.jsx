@@ -115,7 +115,7 @@ export function SetupStart({ user, onNext, onSample }) {
 }
 
 /* ───────── 지갑 ───────── */
-export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onFriends, onReorder, onClose }) {
+export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onEditProgram, onFriends, onReorder, onClose }) {
   const wallet = walletOf(ctx.profile);
   const [edit, setEdit] = useState(false);
   const missing = PROGRAM_LIST.filter((p) => !wallet.some((w) => w.program === p.id));
@@ -158,7 +158,15 @@ export function WalletView({ ctx, goals, user, onOpen, onAdd, onSettings, onFrie
       </div>
       <div className="section-h"><span>메뉴</span></div>
       <div className="pad" style={{ display: 'grid', gap: 8, paddingBottom: 24 }}>
-        <button className="wmenu" onClick={onSettings}><Icon name="user" size={18} />{wallet.some((w) => w.program === 'KE') ? '설정 · 스카이패스 실적 입력' : '설정 · 데이터'}<Icon name="chev" size={16} /></button>
+        {/* 지갑에 있는 프로그램마다 설정 (지갑 순서대로) */}
+        {wallet.map((w) => (
+          <button key={w.program} className="wmenu" onClick={() => (w.program === 'KE' ? onSettings() : onEditProgram(w.program))}>
+            <AirlineMark code={PROGRAMS[w.program].airline} size="xs" />
+            <span>{PROGRAMS[w.program].short} 설정<small>{w.program === 'KE' ? '등급 · 실적 입력 · 데이터 · 로그아웃' : '등급 · 올해 상태포인트 · 적립 방식'}</small></span>
+            <Icon name="chev" size={16} />
+          </button>
+        ))}
+        {!wallet.some((w) => w.program === 'KE') && <button className="wmenu" onClick={onSettings}><Icon name="user" size={18} /><span>데이터 · 계정<small>이름 · 내보내기 · 로그아웃</small></span><Icon name="chev" size={16} /></button>}
         {onFriends && <button className="wmenu" onClick={onFriends}><Icon name="user" size={18} />친구<Icon name="chev" size={16} /></button>}
       </div>
     </div>

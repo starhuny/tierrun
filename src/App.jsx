@@ -545,6 +545,7 @@ export default function App() {
         onOpen={openProgram}
         onAdd={addProgram}
         onSettings={() => setStack({ name: 'settings' })}
+        onEditProgram={(id) => setStack({ name: 'tieradd', program: id, from: 'wallet' })}
         onFriends={social ? () => { loadFriends(true); setStack({ name: 'friends' }); } : null}
         onReorder={(w) => { setWallet(() => w); say('지갑 순서를 바꿨어요'); }}
         onClose={() => setStack(null)}
@@ -559,7 +560,7 @@ export default function App() {
         ctx={ctx}
         onSave={saveTier}
         onDelete={() => removeTier(view.program)}
-        onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, view.program) ? null : { name: 'wallet' }))}
+        onClose={() => (!profile ? setSetupPick(null) : setStack(progEntry(profile, view.program) && view.from !== 'wallet' ? null : { name: 'wallet' }))}
       />
     );
   } else if (view?.name === 'friends') {
