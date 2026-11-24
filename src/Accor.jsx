@@ -396,6 +396,17 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
     setTried(false);
     setS(k === 'bonus' ? makeBonusStay(s.checkIn || ctx.today, null, BONUS_KINDS[1].label, BONUS_KINDS[1].nights) : { ...blankStay(), checkIn: '', checkOut: '' });
   };
+  // 체크인을 바꾸면 박수를 그대로 두고 체크아웃을 옮김(처음엔 다음 날)
+  // 체크아웃을 바꿨는데 체크인이 비었거나 체크아웃보다 늦으면 체크인을 전날로
+  const setCheckIn = (v) => {
+    if (!v) return set({ checkIn: v });
+    const n = s.checkIn && s.checkOut > s.checkIn ? daysBetween(s.checkIn, s.checkOut) : 1;
+    set({ checkIn: v, checkOut: addDays(v, n > 0 && n <= 60 ? n : 1) });
+  };
+  const setCheckOut = (v) => {
+    if (!v) return set({ checkOut: v });
+    set({ checkOut: v, checkIn: !s.checkIn || s.checkIn >= v ? addDays(v, -1) : s.checkIn });
+  };
   const zN = +s.nightsOverride > 0 ? +s.nightsOverride : isZhStay(s) ? ZH_NIGHTS : 0;
   return (
     <div className="fade-in">
@@ -422,8 +433,8 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
             </select>
           </label>
           <div className="row2">
-            <label className="field"><span>체크인</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: v && !(s.checkOut > v) ? addDays(v, 1) : s.checkOut })} invalid={tried && !s.checkIn} /></label>
-            <label className="field"><span>체크아웃</span><DateInput value={s.checkOut} onChange={(v) => set({ checkOut: v })} invalid={tried && !(s.checkOut > s.checkIn)} /></label>
+            <label className="field"><span>체크인</span><DateInput value={s.checkIn} onChange={setCheckIn} invalid={tried && !s.checkIn} /></label>
+            <label className="field"><span>체크아웃</span><DateInput value={s.checkOut} onChange={setCheckOut} invalid={tried && !(s.checkOut > s.checkIn)} /></label>
           </div>
           {tried && !(s.checkIn && s.checkOut > s.checkIn) && <div className="err-t">체크인·체크아웃 날짜를 넣어 주세요.</div>}
           <label className="field"><span>숙박 금액 <span className="faint">(원화 · 세금 포함 결제 금액)</span></span><WonInput value={s.krw} onChange={(v) => set({ krw: v })} /></label>
