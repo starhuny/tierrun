@@ -30,6 +30,10 @@ export const BRAND_RATE = Object.fromEntries(BRAND_GROUPS.flatMap(([, r, list]) 
 export const brandRate = (b) => BRAND_RATE[b] ?? 25;
 
 const year = (d) => +String(d || '').slice(0, 4);
+// 숙박 목록에 들어가는 보너스 기록 (중국 Accor Plus 활성화: 그날 20박 한 번)
+export const ZH_NIGHTS = 20;
+export const isZhStay = (s) => s?.kind === 'zh';
+export const makeZhStay = (date, id) => ({ id, kind: 'zh', hotel: '중국 Accor Plus 활성화', brand: '', checkIn: date, checkOut: date, nightsOverride: ZH_NIGHTS, pointsOverride: 0, krw: null, note: '' });
 const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 export const stayNights = (s) => (s.nightsOverride != null && s.nightsOverride !== '' ? +s.nightsOverride : s.checkIn && s.checkOut ? Math.max(0, days(s.checkIn, s.checkOut)) : 0);
@@ -55,7 +59,6 @@ export function bonusEvents(prog, yr) {
     const ks = yr != null ? (k >= 0 ? [k] : []) : [0];
     for (const x of ks) out.push({ date: addYears(prog.explorerDate, x), nights: 30, label: x === 0 && isV2(prog) ? 'Accor+ Explorer' : 'Accor+ Explorer 갱신' });
   }
-  if (prog?.zh) out.push({ date: prog.zhDate || prog.baseDate || '', nights: 20, label: '중올플 가입' });
   for (const f of prog?.fast || []) if (f?.date && +f.nights > 0) out.push({ date: f.date, nights: +f.nights, label: f.label || '보너스 박' });
   return out.filter((b) => b.date);
 }
@@ -68,6 +71,15 @@ export function acYear(prog, stays, yr, today, eur) {
   const after = (d) => !inBase || d > prog.baseDate;
   for (const s of stays || []) {
     const d = stayDate(s);
+    if (isZhStay(s)) {
+      // 보너스 박: v2는 날짜만 맞으면, 예전 입력은 입력한 날 이후만
+      if (year(d) !== yr || (!isV2(prog) && !after(d))) continue;
+      const n = stayNights(s), w = d <= today ? 'conf' : 'plan';
+      r[w].nights += n;
+      r.bonus.push({ date: d, nights: n, label: '중올플 활성화', past: w === 'conf' });
+      r.rows.push({ s, nights: n, points: 0, est: false, past: w === 'conf', bonus: true });
+      continue;
+    }
     if (year(d) !== yr || !after(d)) continue;
     const n = stayNights(s), p = stayPoints(s, eur);
     const w = d <= today ? 'conf' : 'plan';

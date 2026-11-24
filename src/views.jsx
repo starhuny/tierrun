@@ -15,7 +15,7 @@ import { ALLIANCES } from './skypass.js';
 import { flightSP, spFor, METHOD, METHODS, methodFor, asCategory, CAT, isOwn, asSummary, nextTier } from './alaska.js';
 import { AsStrip, ProgSwitch } from './Wallet.jsx';
 import { AcStrip, StayRow } from './Accor.jsx';
-import { stayDate, stayNights, stayPoints, acSummary } from './accor.js';
+import { stayDate, stayNights, stayPoints, acSummary, isZhStay } from './accor.js';
 
 export const city = (c) => findAirport(c)?.city || c || '?';
 export const routeTitle = (f) => `${city(f.from)} → ${city(f.to)}`;
@@ -965,7 +965,7 @@ export function CostView({ ctx, goals, stats: keStats, asStats, avatar, onOpen, 
 function AccorCost({ ctx, onOpenStay }) {
   const eur = ctx.acProg?.eur;
   const rows = (ctx.stays || []).map((x) => ({ s: x, n: stayNights(x), p: stayPoints(x, eur).pts, krw: +x.krw || 0 })).filter((r) => r.krw > 0 && r.n > 0);
-  const tot = rows.reduce((a, r) => ({ krw: a.krw + r.krw, n: a.n + r.n, p: a.p + r.p }), { krw: 0, n: 0, p: 0 });
+  const tot = rows.reduce((a, r) => ({ krw: a.krw + r.krw, n: a.n + r.n, p: a.p + r.p, pk: a.pk + (isZhStay(r.s) ? 0 : r.krw) }), { krw: 0, n: 0, p: 0, pk: 0 });
   const byN = [...rows].sort((a, b) => a.krw / a.n - b.krw / b.n);
   const unpriced = (ctx.stays || []).filter((x) => !(+x.krw > 0));
   const s = acSummary(ctx.acProg, ctx.stays || [], ctx.today, undefined, eur);
@@ -976,7 +976,7 @@ function AccorCost({ ctx, onOpenStay }) {
         <div className="faint" style={{ fontSize: 13, fontWeight: 700 }}>아코르 평균 박당 단가</div>
         <div className="v">{perN ? fmtWon(perN) : '–'}<small>/박</small></div>
         <div className="s">{rows.length ? `금액 입력한 ${rows.length}건 · 총 ${fmtWon(tot.krw)} · ${fmtNum(tot.n)}박 · ${fmtNum(tot.p)}P` : '숙박에 금액을 넣으면 박당 단가를 계산해요.'}</div>
-        {tot.p > 0 && <div className="s">등급 포인트 1점당 {fmtWon(tot.krw / tot.p)}</div>}
+        {tot.p > 0 && <div className="s">등급 포인트 1점당 {fmtWon(tot.pk / tot.p)}{rows.some((r) => isZhStay(r.s)) ? ' (숙박만)' : ''}</div>}
       </div>
       {perN && s.next && s.remNPlan != null && s.remNPlan > 0 && (
         <div className="pad" style={{ marginTop: 10 }}>
@@ -993,7 +993,7 @@ function AccorCost({ ctx, onOpenStay }) {
         <button key={r.s.id} className="trow num" onClick={() => onOpenStay?.(r.s.id)}>
           <div>
             <div className="rt">{r.s.hotel}</div>
-            <div className="dt">{fmtDate(r.s.checkIn, { weekday: false })} · {r.n}박 · {r.s.brand}</div>
+            <div className="dt">{fmtDate(r.s.checkIn, { weekday: false })} · {isZhStay(r.s) ? `보너스 ${r.n}박` : `${r.n}박 · ${r.s.brand}`}</div>
           </div>
           <div>
             <div className="pm">{fmtWon(r.krw / r.n)}</div>

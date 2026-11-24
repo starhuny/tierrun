@@ -13,7 +13,7 @@ import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './
 import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './Wallet.jsx';
 import { AccorAddView, AccorView, StayForm } from './Accor.jsx';
 import { dailyFx, cachedFx, effectiveEur } from './fx.js';
-import { DEFAULT_EUR } from './accor.js';
+import { DEFAULT_EUR, isZhStay, makeZhStay } from './accor.js';
 import { walletOf, progEntry, hasProgram, allianceOf } from './wallet.js';
 import { flightSP } from './alaska.js';
 
@@ -98,6 +98,14 @@ export default function App() {
         }
         return g;
       }) };
+      // 중올플: 설정 체크박스 → 숙박 목록의 '중올플 활성화' 기록으로 옮김
+      const w0 = Array.isArray(s.profile?.wallet) ? s.profile.wallet : null;
+      const ac0 = w0 && w0.find((w) => w.program === 'ALL' && w.zh);
+      if (ac0) {
+        const d = ac0.zhDate || ac0.baseDate || todayISO();
+        if (!(s.stays || []).some(isZhStay)) s.stays = [...(s.stays || []), makeZhStay(d, uid())];
+        s.profile = { ...s.profile, wallet: w0.map((w) => (w === ac0 ? { ...w, zh: false, zhDate: '' } : w)) };
+      }
       setState(s);
       loaded.current = true;
       setPhase('ready');

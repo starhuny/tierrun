@@ -6,7 +6,7 @@ import { AC_BENEFITS, AC_EXTRAS, AC_BENEFITS_CHECKED } from './accorBenefits.js'
 import { findAirport } from './airports.js';
 import { fmtNum, fmtDate, fmtDot, fmtWon, daysBetween, todayISO, uid, addDays } from './core.js';
 import {
-  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2,
+  AC_TIERS, AC_TIER, BRAND_GROUPS, DEFAULT_EUR, acSummary, pointsCost, acYear, remText, combos, stayNights, stayPoints, stayDate, brandRate, bonusEvents, isV2, isZhStay, makeZhStay, ZH_NIGHTS,
 } from './accor.js';
 import { Icon, AirlineMark, Bar, Seg, NumInput, WonInput, DateInput, AirportInput, Ring, CardFace } from './ui.jsx';
 
@@ -192,8 +192,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
     const d = entry?.explorerDate || '';
     return legacy && d && d > ctx.today ? `${+d.slice(0, 4) - 1}${d.slice(4)}` : d;
   });
-  const [zh, setZh] = useState(!!entry?.zh);
-  const [zhDate, setZhDate] = useState(entry?.zhDate || (entry?.zh ? entry?.baseDate || ctx.today : ''));
+  const zhRec = (ctx.stays || []).find(isZhStay);
   const [fast, setFast] = useState(entry?.fast || []);
   const [eur, setEur] = useState(entry?.eur || fx?.rate || DEFAULT_EUR);
   const [eurAuto, setEurAuto] = useState(entry?.eurAuto !== false);
@@ -204,7 +203,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
     const baseDate = !has ? '' : changed || !entry?.baseDate ? todayISO() : entry.baseDate;
     onSave({
       ...(entry || {}), program: 'ALL', tier, validUntil, nights: +nights || 0, points: +points || 0, baseDate,
-      v: 2, explorer, explorerDate: explorer ? explorerDate : '', zh, zhDate: zh ? zhDate || todayISO() : '', eurAuto, eur: eurAuto ? fx?.rate || +eur || DEFAULT_EUR : +eur || DEFAULT_EUR,
+      v: 2, explorer, explorerDate: explorer ? explorerDate : '', zh: false, zhDate: '', eurAuto, eur: eurAuto ? fx?.rate || +eur || DEFAULT_EUR : +eur || DEFAULT_EUR,
       fast: fast.filter((f) => f.date && +f.nights > 0).map((f) => ({ ...f, nights: +f.nights })),
     });
   };
@@ -244,13 +243,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
           {explorer && (
             <label className="field"><span>가입일 또는 최근 갱신일 <span className="faint">(이 날과 매년 같은 날 30박)</span></span><DateInput value={explorerDate} onChange={setExplorerDate} /></label>
           )}
-          <label className="checkrow light">
-            <input type="checkbox" checked={zh} onChange={(e) => { setZh(e.target.checked); if (e.target.checked && !zhDate) setZhDate(todayISO()); }} />
-            <span>중국 Accor Plus(중올플) 가입 <small>(가입할 때 20박 한 번)</small></span>
-          </label>
-          {zh && (
-            <label className="field"><span>가입일 <span className="faint">(이 날이 속한 해에 20박)</span></span><DateInput value={zhDate} onChange={setZhDate} /></label>
-          )}
+          <div className="help" style={{ margin: 0 }}>중국 Accor Plus(중올플)는 한 번 사는 거라 숙박처럼 넣어요. <b>+ › 숙박 추가 › 중올플 활성화</b>{zhRec ? <> · 지금 {fmtDot(zhRec.checkIn)} 활성화로 들어가 있어요.</> : null}</div>
           <div className="lab" style={{ marginTop: 4 }}>추가 보너스 박 <span className="faint">(패스트트랙·플라잉블루 이벤트 등)</span></div>
           {fast.map((f, i) => (
             <div key={i} className="fastbox">
@@ -299,6 +292,7 @@ export function AccorAddView({ entry, ctx, fx, onSave, onDelete, onClose }) {
 
 /* ───────── 숙박 한 줄 ───────── */
 export function StayRow({ s, ctx, onClick }) {
+  if (isZhStay(s)) return <ZhRow s={s} ctx={ctx} onClick={onClick} />;
   const n = stayNights(s);
   const p = stayPoints(s, ctx.acProg?.eur);
   const d = daysBetween(ctx.today, s.checkIn || s.checkOut);
@@ -330,6 +324,50 @@ export function StayRow({ s, ctx, onClick }) {
   );
 }
 
+function ZhRow({ s, ctx, onClick }) {
+  const n = stayNights(s);
+  const d = daysBetween(ctx.today, s.checkIn);
+  return (
+    <button className="frow stayrow" onClick={onClick}>
+      {d < 0 ? <div className="dday"><span className="done"><Icon name="check" size={16} stroke={2.6} /></span><small>적용됨</small></div>
+        : d === 0 ? <div className="dday today"><b>오늘</b></div>
+        : <div className="dday"><b className="num">{d}</b><small>일 후</small></div>}
+      <div>
+        <div className="fmeta">
+          <span className="mark sm bed"><Icon name="plus" size={13} /></span>
+          <span>보너스 박</span>
+          <span className="d">{fmtDate(s.checkIn)}</span>
+        </div>
+        <div className="ftitle">중올플 활성화 +{n}박</div>
+        <div className="ftimes num"><span>중국 Accor Plus</span><span>{fmtDate(s.checkIn, { weekday: false })} 적용</span></div>
+        <div className="fchips num">
+          <span className="chip"><b>+{n}</b>박</span>
+          {+s.krw > 0 && <span className="chip"><b>{fmtWon(s.krw / n)}</b>/박</span>}
+          <span className="badge cr-ALL">아코르</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// 중올플 활성화 입력
+function ZhForm({ s, set, tried, other }) {
+  return (
+    <div className="segcard">
+      <p className="help" style={{ margin: 0 }}>중국 Accor Plus(중올플)를 사서 활성화하면 등급 숙박일 <b>20박</b>이 한 번 들어와요. 활성화한 날이 속한 해의 등급에 더해져요.</p>
+      {other && <div className="notice" style={{ margin: 0 }}>이미 {fmtDot(other.checkIn)} 중올플 활성화 기록이 있어요. 한 번만 들어오는 보너스라 중복되지 않게 확인해 주세요.</div>}
+      <label className="field"><span>활성화한 날</span><DateInput value={s.checkIn} onChange={(v) => set({ checkIn: v, checkOut: v })} invalid={tried && !s.checkIn} /></label>
+      {tried && !s.checkIn && <div className="err-t">활성화한 날을 넣어 주세요.</div>}
+      <div className="row2">
+        <label className="field"><span>등급 숙박일</span><NumInput value={s.nightsOverride} suffix="박" placeholder={String(ZH_NIGHTS)} onChange={(v) => set({ nightsOverride: v })} /></label>
+        <label className="field"><span>결제 금액 <span className="faint">(선택)</span></span><WonInput value={s.krw} onChange={(v) => set({ krw: v })} /></label>
+      </div>
+      <p className="help" style={{ margin: 0 }}>금액을 넣으면 단가 탭에서 박당 비용에 함께 계산돼요.</p>
+      <label className="field"><span>메모 <span className="faint">(선택)</span></span><input className="input" value={s.note || ''} onChange={(e) => set({ note: e.target.value })} /></label>
+    </div>
+  );
+}
+
 /* ───────── 숙박 추가·수정 ───────── */
 const blankStay = () => ({ id: null, hotel: '', brand: 'Novotel', city: '', checkIn: '', checkOut: '', krw: null, nightsOverride: null, pointsOverride: null, note: '' });
 export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
@@ -340,20 +378,33 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
   const set = (p) => setS((x) => ({ ...x, ...p }));
   const n = stayNights({ ...s, nightsOverride: null });
   const p = stayPoints({ ...s, pointsOverride: null }, ctx.acProg?.eur);
-  const valid = s.hotel.trim() && s.checkIn && s.checkOut && s.checkOut > s.checkIn;
+  const zh = isZhStay(s);
+  const otherZh = (ctx.stays || []).find((x) => isZhStay(x) && x.id !== s.id);
+  const valid = zh ? !!s.checkIn : s.hotel.trim() && s.checkIn && s.checkOut && s.checkOut > s.checkIn;
   const save = () => {
     setTried(true);
     if (!valid) return;
-    onSave({ ...s, id: s.id || uid(), hotel: s.hotel.trim(), krw: s.krw == null || s.krw === '' ? null : +s.krw });
+    const krw = s.krw == null || s.krw === '' ? null : +s.krw;
+    if (zh) return onSave({ ...s, id: s.id || uid(), checkOut: s.checkIn, nightsOverride: +s.nightsOverride > 0 ? +s.nightsOverride : ZH_NIGHTS, pointsOverride: 0, krw });
+    onSave({ ...s, id: s.id || uid(), kind: undefined, hotel: s.hotel.trim(), krw });
   };
+  // 새로 넣을 때만 종류를 고를 수 있음
+  const setKind = (k) => {
+    if (k === (zh ? 'zh' : 'stay')) return;
+    setTried(false);
+    setS(k === 'zh' ? { ...makeZhStay(s.checkIn || ctx.today, null) } : { ...blankStay(), checkIn: '', checkOut: '' });
+  };
+  const zN = +s.nightsOverride > 0 ? +s.nightsOverride : ZH_NIGHTS;
   return (
     <div className="fade-in">
       <div className="dhead">
         <span className="mark bed" style={{ background: '#1e1852' }}><Icon name="bed" size={16} /></span>
-        <div><div className="k">아코르 ALL · 등급 숙박일·포인트 자동 계산</div><h2>{initial?.id ? '숙박 편집' : '숙박 추가'}</h2></div>
+        <div><div className="k">아코르 ALL · 등급 숙박일·포인트 자동 계산</div><h2>{initial?.id ? (zh ? '중올플 활성화 편집' : '숙박 편집') : '숙박 추가'}</h2></div>
         <button className="icon-btn" onClick={onCancel} aria-label="닫기"><Icon name="close" size={18} /></button>
       </div>
       <div className="form">
+        {!initial?.id && <Seg options={[['stay', '호텔 숙박'], ['zh', '중올플 활성화 +20박']]} value={zh ? 'zh' : 'stay'} onChange={setKind} />}
+        {zh ? <ZhForm s={s} set={set} tried={tried} other={otherZh} /> : (
         <div className="segcard">
           <CityInput value={stayPlace(s)} onPick={(c) => set({ cityName: c.ko, cityEn: c.en, cc: c.cc, lat: c.lat, lon: c.lon, cityLat: c.lat, cityLon: c.lon, city: '', hotelId: null })} />
           <HotelPicker s={s} set={set} onTypeName={(v) => set({ hotel: v, hotelId: null, ...(brandTouched ? {} : { brand: detectBrand(v) || s.brand }), ...(s.hotelId && s.cityLat != null ? { lat: s.cityLat, lon: s.cityLon } : {}) })} />
@@ -389,11 +440,16 @@ export function StayForm({ initial, ctx, onSave, onDelete, onCancel }) {
           <p className="help" style={{ margin: 0 }}>숙박 후 아코르 앱에 적립된 값을 넣으면 그 값으로 계산해요. 비워 두면 금액·브랜드로 추정해요.</p>
           <label className="field"><span>메모 <span className="faint">(선택)</span></span><input className="input" value={s.note || ''} onChange={(e) => set({ note: e.target.value })} /></label>
         </div>
-        {initial?.id && (del ? <button className="btn danger block" onClick={() => onDelete(s.id)}>이 숙박 삭제</button> : <button className="btn danger block" onClick={() => setDel(true)}><Icon name="trash" size={17} />숙박 삭제</button>)}
+        )}
+        {initial?.id && (del ? <button className="btn danger block" onClick={() => onDelete(s.id)}>{zh ? '이 기록 삭제' : '이 숙박 삭제'}</button> : <button className="btn danger block" onClick={() => setDel(true)}><Icon name="trash" size={17} />{zh ? '기록 삭제' : '숙박 삭제'}</button>)}
       </div>
       <div className="sumbar">
-        <div className="line num"><span>등급 <b>{fmtNum(s.nightsOverride ?? n)}박 · {fmtNum(s.pointsOverride ?? p.pts)}P</b></span><span>{+s.krw > 0 && n > 0 ? <>박당 <b>{fmtWon(s.krw / n)}</b></> : '금액 미입력'}</span></div>
-        <button className="btn primary block" onClick={save}>{initial?.id ? '저장' : '숙박 추가'}</button>
+        {zh ? (
+          <div className="line num"><span>등급 <b>+{fmtNum(zN)}박</b></span><span>{+s.krw > 0 ? <>박당 <b>{fmtWon(s.krw / zN)}</b></> : '금액 미입력'}</span></div>
+        ) : (
+          <div className="line num"><span>등급 <b>{fmtNum(s.nightsOverride ?? n)}박 · {fmtNum(s.pointsOverride ?? p.pts)}P</b></span><span>{+s.krw > 0 && n > 0 ? <>박당 <b>{fmtWon(s.krw / n)}</b></> : '금액 미입력'}</span></div>
+        )}
+        <button className="btn primary block" onClick={save}>{initial?.id ? '저장' : zh ? '중올플 활성화 추가' : '숙박 추가'}</button>
       </div>
     </div>
   );
@@ -479,7 +535,7 @@ export function AccorView({ prog, ctx, head, footer, onOpenStay, onAddStay }) {
         </>
       )}
 
-      {tab === 'combo' && <ComboTab prog={prog} s={s} yr={yr} />}
+      {tab === 'combo' && <ComboTab prog={prog} s={s} yr={yr} stays={stays} />}
       {tab === 'perks' && <PerksTab held={s.held} />}
       {tab === 'stays' && (
         <StayList rows={[...stays].sort((a, b) => stayDate(b).localeCompare(stayDate(a))).map((x) => ({ s: x }))} ctx={ctx} title="전체 숙박" onOpen={onOpenStay} onAdd={onAddStay} />
@@ -570,15 +626,17 @@ function StayList({ rows, ctx, title, onOpen, onAdd }) {
   );
 }
 
-function ComboTab({ prog, s, yr }) {
+function ComboTab({ prog, s, yr, stays }) {
   // 그 해 실제 숙박 + 기타 보너스(패스트트랙 등)를 두고 멤버십 보너스(Explorer·중올플)만 바꿔 가며 비교
   const v2 = isV2(prog);
-  const stayN = (v2 ? s.base.nights : 0) + s.rows.reduce((a, r) => a + r.nights, 0);
-  const stayP = (v2 ? s.base.points : 0) + s.rows.reduce((a, r) => a + r.points, 0);
+  const real = s.rows.filter((r) => !r.bonus);
+  const stayN = (v2 ? s.base.nights : 0) + real.reduce((a, r) => a + r.nights, 0);
+  const stayP = (v2 ? s.base.points : 0) + real.reduce((a, r) => a + r.points, 0);
   const isMember = (b) => /Explorer|중올플/.test(b.label);
   const otherN = s.bonus.filter((b) => !isMember(b)).reduce((a, b) => a + b.nights, 0);
-  const zhYear = prog.zh ? +String(prog.zhDate || prog.baseDate || '').slice(0, 4) : 0;
-  const zhUsed = !!prog.zh && zhYear > 0 && zhYear < yr;
+  const zhRec = (stays || []).find(isZhStay);
+  const zhYear = zhRec ? +String(zhRec.checkIn).slice(0, 4) : 0;
+  const zhUsed = zhYear > 0 && zhYear < yr;
   const expIn = s.bonus.some((b) => /Explorer/.test(b.label));
   const zhIn = s.bonus.some((b) => /중올플/.test(b.label));
   const list = combos(stayN, stayP, otherN, { zhUsed });
