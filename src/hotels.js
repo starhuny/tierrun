@@ -1,4 +1,5 @@
-// 도시 주변 아코르 호텔 목록 (/api/hotels) — 같은 도시는 기기에 7일 보관
+// 도시 주변 아코르 호텔 목록 (OpenStreetMap) — 같은 도시는 기기에 7일 보관
+import { OVERPASS, buildQuery, parseOverpass } from './osmHotels.js';
 const KEY = 'tierrun:hotels';
 const TTL = 7 * 86400000;
 const mem = new Map();
@@ -23,11 +24,21 @@ export async function fetchHotels(lat, lon) {
   if (mem.has(k)) return mem.get(k);
   const hit = readStore()[k];
   if (hit && Date.now() - hit.t < TTL) { mem.set(k, hit.hotels); return hit.hotels; }
-  const r = await fetch(`/api/hotels?lat=${(+lat).toFixed(2)}&lon=${(+lon).toFixed(2)}`);
-  if (!r.ok) throw new Error(`hotels ${r.status}`);
-  const j = await r.json();
-  if (j.error) throw new Error(j.error);
-  const hotels = Array.isArray(j.hotels) ? j.hotels : [];
+  const la = +(+lat).toFixed(2), lo = +(+lon).toFixed(2);
+  const body = 'data=' + encodeURIComponent(buildQuery(la, lo, 25000));
+  let hotels = null, last = null;
+  for (const url of OVERPASS) {
+    try {
+      const ctl = new AbortController();
+      const tm = setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch(url, { method: 'POST', body, signal: ctl.signal, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      clearTimeout(tm);
+      if (!r.ok) throw new Error(`${r.status}`);
+      hotels = parseOverpass(await r.json(), la, lo);
+      break;
+    } catch (e) { last = e; }
+  }
+  if (!hotels) throw last || new Error('hotels');
   mem.set(k, hotels);
   if (hotels.length) writeStore(k, hotels);
   return hotels;
