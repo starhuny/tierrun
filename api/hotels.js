@@ -64,6 +64,7 @@ async function main(req, res) {
   // 한국은 한글 이름 그대로, 그 밖은 영어 이름 우선
   const lang = cc === 'KR' ? '' : 'en';
   const qs = [...QUERIES, ...(LOCAL[cc] || [])].slice(0, +req.query.n || 99);
+  if (req.query.stage === 'a') return res.status(200).json({ bbox, qs, lang });
   // 공개 서버라 한 번에 몰아 보내지 않고 8개씩, 실패한 건 한 번 더
   const t0 = Date.now();
   const results = new Array(qs.length);
@@ -79,6 +80,7 @@ async function main(req, res) {
   let next = 0;
   await Promise.all(Array.from({ length: 8 }, async () => { while (next < qs.length && Date.now() - t0 < 7000) await run(next++); }));
   const ok = results.filter((r) => r?.status === 'fulfilled');
+  if (req.query.stage === 'b') return res.status(200).json({ ms: Date.now() - t0, st: results.map((r) => r?.status + ':' + (r?.value?.length ?? String(r?.reason?.message || ''))) });
   const failed = qs.filter((_, i) => results[i]?.status !== 'fulfilled');
   if (!ok.length) {
     res.setHeader('Cache-Control', 'no-store');
