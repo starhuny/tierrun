@@ -59,20 +59,28 @@ export function parseOverpass(json, lat, lon) {
 export default async function handler(req, res) {
   if (req.query.ping) return res.status(200).json({ ok: true, brand: detectBrand('Novotel Suites Hanoi') });
   if (req.query.diag) {
-    // 점검: 각 서버에 아주 작은 질의를 5초 안에
+    // 점검: 서버·요청 방식별로 아주 작은 질의를 7초 안에
     const out = [];
-    const q = req.query.diag === 'full' ? buildQuery(21.03, 105.85, 5000) : '[out:json][timeout:5];node["tourism"="hotel"](around:500,21.03,105.85);out tags 3;';
-    await Promise.all(MIRRORS.map(async (url) => {
+    const q = '[out:json][timeout:5];node["tourism"="hotel"](around:500,21.03,105.85);out tags 3;';
+    const enc = encodeURIComponent(q);
+    const tries = [
+      ['de-post-ua', 'https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + enc, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'TierRun/1.0 (+https://tierrun.vercel.app)', Accept: '*/*' } }],
+      ['de-post-plain', 'https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + enc, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }],
+      ['de-get', 'https://overpass-api.de/api/interpreter?data=' + enc, { headers: { 'User-Agent': 'TierRun/1.0 (+https://tierrun.vercel.app)', Accept: 'application/json' } }],
+      ['kumi', 'https://overpass.kumi.systems/api/interpreter', { method: 'POST', body: 'data=' + enc, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'TierRun/1.0 (+https://tierrun.vercel.app)' } }],
+      ['coffee-get', 'https://overpass.private.coffee/api/interpreter?data=' + enc, { headers: { 'User-Agent': 'TierRun/1.0 (+https://tierrun.vercel.app)' } }],
+    ];
+    await Promise.all(tries.map(async ([name, url, opt]) => {
       const t = Date.now();
       try {
         const ctl = new AbortController();
         const tm = setTimeout(() => ctl.abort(), 7000);
-        const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: ctl.signal, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'tierrun.vercel.app (hotel list)' } });
+        const r = await fetch(url, { ...opt, signal: ctl.signal });
         clearTimeout(tm);
         const txt = await r.text();
-        out.push({ host: new URL(url).host, status: r.status, ms: Date.now() - t, head: txt.slice(0, 160) });
+        out.push({ name, status: r.status, ms: Date.now() - t, n: (txt.match(/"type"/g) || []).length });
       } catch (e) {
-        out.push({ host: new URL(url).host, err: String(e.name === 'AbortError' ? 'timeout' : e.message || e), ms: Date.now() - t });
+        out.push({ name, err: String(e.name === 'AbortError' ? 'timeout' : e.message || e), ms: Date.now() - t });
       }
     }));
     return res.status(200).json(out);
