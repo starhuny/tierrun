@@ -157,7 +157,7 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
     // 숙박 핀 (호텔): 둥근 사각형
     const pinAps = [];
     for (const pin of pn || []) {
-      const ap = pin.lat != null ? { code: `pin:${pin.id}`, city: pin.label || '', lat: pin.lat, lon: pin.lon } : findAirport(pin.code);
+      const ap = pin.lat != null ? { code: `pin:${pin.id}`, city: pin.label || '', title: pin.title, lat: pin.lat, lon: pin.lon } : findAirport(pin.code);
       if (!ap) continue;
       const p = [ap.lon, ap.lat];
       if (!visible(p)) continue;
@@ -184,17 +184,18 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
       const [x, y] = proj(p);
       if (isSelAp && sel) {
         ctx.font = `700 12px ${col.font}`;
-        const t = `${ap.city} ${ap.code}`;
+        const t = String(ap.code).startsWith('pin:') ? ap.title || ap.city : `${ap.city} ${ap.code}`;
         const tw = ctx.measureText(t).width + 16;
         const r = { x: x + 8, y: y - 12, w: tw, h: 24 };
         if (r.x + r.w > s.w - 8) r.x = x - 8 - tw;
+        if (r.x < 8) { r.x = Math.max(8, Math.min(x - tw / 2, s.w - 8 - tw)); r.y = y - 36; }
         placed.push(r);
         ctx.fillStyle = col.pill;
         ctx.beginPath();
         ctx.roundRect ? ctx.roundRect(r.x, r.y, r.w, r.h, 12) : ctx.rect(r.x, r.y, r.w, r.h);
         ctx.fill();
         ctx.fillStyle = col.pillInk;
-        ctx.fillText(t, r.x + 8, y);
+        ctx.fillText(t, r.x + 8, r.y + r.h / 2);
         continue;
       }
       ctx.font = `700 12px ${col.font}`;
@@ -359,6 +360,14 @@ export default function Globe({ flights, pins = [], selectedId, onSelect, insetL
       const x = e.clientX - rect.left, y = e.clientY - rect.top;
       const center = [s.lon, s.lat];
       let best = null, bd = 14;
+      // 호텔 핀이 노선보다 먼저
+      for (const pin of props.current.pins || []) {
+        const ap = pin.lat != null ? { lat: pin.lat, lon: pin.lon } : findAirport(pin.code);
+        if (!ap || geoDistance(center, [ap.lon, ap.lat]) > Math.PI / 2 - 0.02) continue;
+        const q = s.proj([ap.lon, ap.lat]);
+        const d = Math.hypot(q[0] - x, q[1] - y);
+        if (d < 16 && d < bd + 2) { bd = d - 2; best = pin.id; }
+      }
       for (const f of fl) {
         const a = findAirport(f.from), b = findAirport(f.to);
         if (!a || !b) continue;

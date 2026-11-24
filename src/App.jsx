@@ -13,7 +13,7 @@ import { INVITE_PARAM, INVITE_KEY, newToken, buildPublic, togetherMap } from './
 import { WalletView, TierAddView, AlaskaView, SetupStart, ProgSwitch } from './Wallet.jsx';
 import { AccorAddView, AccorView, StayForm } from './Accor.jsx';
 import { dailyFx, cachedFx, effectiveEur } from './fx.js';
-import { DEFAULT_EUR, isZhStay, makeZhStay, makeBonusStay } from './accor.js';
+import { DEFAULT_EUR, isZhStay, isBonusStay, makeZhStay, makeBonusStay } from './accor.js';
 import { walletOf, progEntry, hasProgram, allianceOf } from './wallet.js';
 import { flightSP } from './alaska.js';
 
@@ -529,7 +529,6 @@ export default function App() {
     : { name: 'tieradd', program: setupPick.programs[0], setup: true, queue: setupPick.programs.slice(1) };
   const panelW = Math.min(420, Math.max(340, vw * 0.31));
   const onMap = mobile && tab === 'map' && !view;
-  const selFlight = (sel && flights.find((f) => f.id === sel)) || sortFlights(flights).find((f) => f.date >= today) || sortFlights(flights).at(-1) || null;
   const avatar = <Avatar user={ad?.user} name={profile?.name} onClick={() => setStack({ name: 'wallet' })} />;
   const banner =
     profile?.sample ? (
@@ -770,6 +769,13 @@ export default function App() {
   const showGlobe = !mobile || onMap;
   // 지도도 고른 얼라이언스 칩대로 (호텔 칩이면 숙박 핀만)
   const mapFlights = alliance === 'ALL' ? flights : alliance === 'HOTEL' ? [] : flights.filter((f) => allianceOf(f) === alliance);
+  // 모바일 지도 아래 카드: 지도에 그려진 항공편 + 숙박(호텔 핀)을 날짜순으로
+  const mapStays = alliance === 'ALL' || alliance === 'HOTEL' ? stays.filter((x) => !isBonusStay(x) && (x.lat != null || x.city)) : [];
+  const mapItems = [
+    ...mapFlights.map((f) => ({ id: f.id, key: f.date + (f.dep || '99'), day: f.date, f })),
+    ...mapStays.map((x) => ({ id: `st-${x.id}`, key: `${x.checkIn}15:00`, day: x.checkOut || x.checkIn, s: x })),
+  ].sort((a, b) => a.key.localeCompare(b.key));
+  const selItem = (sel && mapItems.find((x) => x.id === sel)) || mapItems.find((x) => x.day >= today) || mapItems.at(-1) || null;
   // 친구 화면을 보고 있으면 지도에 친구의 다가오는 항공편을 그림
   const frOnMap = view?.name === 'friend' ? friends.find((x) => x.uid === view.uid) : null;
   const frFlights = frOnMap ? (frOnMap.upcoming || []).filter((u) => u.date >= today).map((u, i) => ({ ...u, id: `fr-${i}` })) : null;
@@ -779,9 +785,9 @@ export default function App() {
         <div className="map-layer" id="map">
           <Globe
             flights={frFlights || mapFlights}
-            pins={frFlights || !(alliance === 'ALL' || alliance === 'HOTEL') ? [] : stays.filter((x) => x.lat != null || x.city).map((x) => (x.lat != null ? { id: `st-${x.id}`, lat: x.lat, lon: x.lon, label: x.cityName } : { id: `st-${x.id}`, code: x.city }))}
+            pins={frFlights || !(alliance === 'ALL' || alliance === 'HOTEL') ? [] : stays.filter((x) => x.lat != null || x.city).map((x) => (x.lat != null ? { id: `st-${x.id}`, lat: x.lat, lon: x.lon, label: x.cityName, title: x.hotel } : { id: `st-${x.id}`, code: x.city }))}
             selectedId={frFlights ? null : sel}
-            onSelect={(id) => (frFlights ? null : mobile ? setSel(id) : open(id))}
+            onSelect={(id) => (frFlights ? null : mobile ? setSel(id) : String(id).startsWith('st-') ? setStack({ name: 'stay', id: id.slice(3) }) : open(id))}
             insetLeft={mobile ? 0 : panelW + 32}
             insetBottom={mobile ? 170 : 0}
             today={today}
@@ -804,7 +810,7 @@ export default function App() {
         {!mobile && tabbar}
       </aside>
       {mobile && tabbar}
-      {onMap && selFlight && <MapStrip ctx={ctx} selId={selFlight.id} onSel={setSel} onOpen={open} />}
+      {onMap && selItem && <MapStrip items={mapItems} ctx={ctx} selId={selItem.id} onSel={setSel} onOpen={(x) => (x.f ? open(x.f.id) : setStack({ name: 'stay', id: x.s.id }))} />}
       {onMap && !flights.length && !stays.length && (
         <div className="map-card" style={{ padding: 16 }}>
           <p style={{ margin: 0 }} className="muted">항공편을 추가하면 노선이 지구본에 그려져요.</p>

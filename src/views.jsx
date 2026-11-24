@@ -81,12 +81,13 @@ export function FlightRow({ f, ctx, selected, onClick, pick }) {
 }
 
 // 지도 아래 항공편 카드: 옆으로 넘기면 지난·다음 항공편
-export function MapStrip({ ctx, selId, onSel, onOpen }) {
-  const list = useMemo(() => sortFlights(ctx.flights), [ctx.flights]);
+// 지도 아래 카드 넘기기: 항공편 + 숙박을 날짜순으로 (items: [{ id, f } | { id, s }])
+export function MapStrip({ items, ctx, selId, onSel, onOpen }) {
+  const list = items;
   const ref = useRef(null);
   const timer = useRef(0);
   const first = useRef(true);
-  const idx = Math.max(0, list.findIndex((f) => f.id === selId));
+  const idx = Math.max(0, list.findIndex((x) => x.id === selId));
   const [shown, setShown] = useState(idx);
 
   // 선택이 바뀌면(지도에서 노선을 눌렀을 때 등) 그 카드로 이동
@@ -110,8 +111,8 @@ export function MapStrip({ ctx, selId, onSel, onOpen }) {
       if (d < bd) { bd = d; best = i; }
     });
     setShown(best);
-    const f = list[best];
-    if (f && f.id !== selId) onSel(f.id);
+    const x = list[best];
+    if (x && x.id !== selId) onSel(x.id);
   };
   const onScroll = () => {
     clearTimeout(timer.current);
@@ -123,10 +124,10 @@ export function MapStrip({ ctx, selId, onSel, onOpen }) {
   return (
     <div className="map-strip-wrap">
       <div className="map-strip" ref={ref} onScroll={onScroll}>
-        {list.map((f, i) => (
-          <div key={f.id} className="map-slide">
-            <FlightRow f={f} ctx={ctx} onClick={() => onOpen(f.id)} />
-            {list.length > 1 && <span className="map-idx num" aria-label={`${list.length}편 중 ${i + 1}번째`}>{i + 1} / {list.length}</span>}
+        {list.map((x, i) => (
+          <div key={x.id} className="map-slide">
+            {x.f ? <FlightRow f={x.f} ctx={ctx} onClick={() => onOpen(x)} /> : <StayRow s={x.s} ctx={ctx} onClick={() => onOpen(x)} />}
+            {list.length > 1 && <span className="map-idx num" aria-label={`${list.length}개 중 ${i + 1}번째`}>{i + 1} / {list.length}</span>}
           </div>
         ))}
       </div>
