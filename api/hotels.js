@@ -30,7 +30,7 @@ async function photon(q, bbox, lang) {
   u.searchParams.set('osm_tag', 'tourism');
   if (lang) u.searchParams.set('lang', lang);
   const ctl = new AbortController();
-  const tm = setTimeout(() => ctl.abort(), 9000);
+  const tm = setTimeout(() => ctl.abort(), 5000);
   try {
     const r = await fetch(u, { signal: ctl.signal, headers: { 'User-Agent': UA, Accept: 'application/json' } });
     if (!r.ok) throw new Error(`photon ${r.status}`);
@@ -58,13 +58,13 @@ export default async function handler(req, res) {
     for (let k = 0; k < 2; k++) {
       try { results[i] = { status: 'fulfilled', value: await photon(qs[i], bbox, lang) }; return; } catch (e) {
         results[i] = { status: 'rejected', reason: e };
-        if (Date.now() - t0 > 12000) return;
-        await new Promise((r) => setTimeout(r, 700));
+        if (Date.now() - t0 > 6000) return;
+        await new Promise((r) => setTimeout(r, 400));
       }
     }
   };
   let next = 0;
-  await Promise.all(Array.from({ length: 4 }, async () => { while (next < qs.length && Date.now() - t0 < 15000) await run(next++); }));
+  await Promise.all(Array.from({ length: 4 }, async () => { while (next < qs.length && Date.now() - t0 < 7000) await run(next++); }));
   const ok = results.filter((r) => r?.status === 'fulfilled');
   const failed = qs.filter((_, i) => results[i]?.status !== 'fulfilled');
   if (!ok.length) {
